@@ -12,10 +12,15 @@ struct RecentDocument: Codable, Identifiable, Equatable {
 
 enum RecentDocumentStore {
     static let appGroupID = "group.com.dan.Downdraft"
-    private static let key = "recentDocuments"
+    private static var recentDocumentsURL: URL? {
+        FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: appGroupID)?
+            .appendingPathComponent("recent-documents.json")
+    }
 
     static var documents: [RecentDocument] {
-        guard let data = UserDefaults(suiteName: appGroupID)?.data(forKey: key),
+        guard let url = recentDocumentsURL,
+              let data = try? Data(contentsOf: url),
               let documents = try? JSONDecoder().decode([RecentDocument].self, from: data) else {
             return []
         }
@@ -34,7 +39,9 @@ enum RecentDocumentStore {
         updated.insert(recentDocument, at: 0)
         let encoder = JSONEncoder()
         guard let data = try? encoder.encode(Array(updated.prefix(4))) else { return }
-        UserDefaults(suiteName: appGroupID)?.set(data, forKey: key)
+        if let url = recentDocumentsURL {
+            try? data.write(to: url, options: .atomic)
+        }
         WidgetCenter.shared.reloadAllTimelines()
     }
 

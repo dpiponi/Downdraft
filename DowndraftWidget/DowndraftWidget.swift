@@ -18,7 +18,9 @@ private struct RecentDocumentProvider: TimelineProvider {
     }
 
     private var documents: [RecentDocument] {
-        guard let data = UserDefaults(suiteName: "group.com.dan.Downdraft")?.data(forKey: "recentDocuments"),
+        guard let containerURL = FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: "group.com.dan.Downdraft"),
+              let data = try? Data(contentsOf: containerURL.appendingPathComponent("recent-documents.json")),
               let documents = try? JSONDecoder().decode([RecentDocument].self, from: data) else {
             return []
         }
