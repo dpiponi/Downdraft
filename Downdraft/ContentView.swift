@@ -115,15 +115,18 @@ struct ContentView: View {
                 }
                 if selectedDocument != nil {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Menu("Page Layout", systemImage: "rectangle.split.2x1") {
-                            Button(
-                                treatsFirstPageAsCover
-                                    ? "Include First Page in Spread"
-                                    : "First Page Is a Cover"
-                            ) {
-                                setFirstPageCover(!treatsFirstPageAsCover)
-                            }
+                        Button {
+                            setFirstPageCover(!treatsFirstPageAsCover)
+                        } label: {
+                            Image(systemName: treatsFirstPageAsCover
+                                ? "rectangle.split.2x1"
+                                : "rectangle")
                         }
+                        .accessibilityLabel(
+                            treatsFirstPageAsCover
+                                ? "Show first page in facing pages"
+                                : "Show first page as a cover"
+                        )
                     }
                 }
             }
