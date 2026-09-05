@@ -67,6 +67,7 @@ struct PDFDocumentView: UIViewRepresentable {
         private var displayedSearchSelection: PDFSelection?
         private var displayedOutlineDestination: PDFDestination?
         var lastKnownPageIndex = 0
+        private var layoutSnapshot: UIView?
         func startObservingPageChanges(in pdfView: PDFView) {
             NotificationCenter.default.addObserver(
                 self,
@@ -105,13 +106,43 @@ struct PDFDocumentView: UIViewRepresentable {
             self.displaysAsBook = displaysAsBook
             let pageIndex = pdfView.currentPage.flatMap { pdfView.document?.index(for: $0) }
                 ?? lastKnownPageIndex
-            pdfView.displaysAsBook = displaysAsBook
-            pdfView.displayMode = isLandscape ? .twoUpContinuous : .singlePageContinuous
+            showLayoutSnapshot(over: pdfView)
+            UIView.performWithoutAnimation {
+                pdfView.displaysAsBook = displaysAsBook
+                pdfView.displayMode = isLandscape ? .twoUpContinuous : .singlePageContinuous
+                pdfView.layoutIfNeeded()
+            }
             DispatchQueue.main.async { [weak pdfView] in
                 guard let pdfView,
                       let page = pdfView.document?.page(at: pageIndex) else { return }
                 pdfView.go(to: page)
+                DispatchQueue.main.async { [weak self] in
+                    self?.removeLayoutSnapshot()
+                }
             }
+        }
+
+        private func showLayoutSnapshot(over pdfView: PDFView) {
+            layoutSnapshot?.removeFromSuperview()
+            guard let snapshot = pdfView.snapshotView(afterScreenUpdates: false) else { return }
+            snapshot.frame = pdfView.bounds
+            snapshot.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            pdfView.addSubview(snapshot)
+            layoutSnapshot = snapshot
+        }
+
+        private func removeLayoutSnapshot() {
+            guard let layoutSnapshot else { return }
+            UIView.transition(
+                with: layoutSnapshot,
+                duration: 0.12,
+                options: .transitionCrossDissolve
+            ) {
+                layoutSnapshot.alpha = 0
+            } completion: { _ in
+                layoutSnapshot.removeFromSuperview()
+            }
+            self.layoutSnapshot = nil
         }
 
         func updateSearchSelection(_ selection: PDFSelection?, in pdfView: PDFView) {
