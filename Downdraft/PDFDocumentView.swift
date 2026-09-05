@@ -117,6 +117,13 @@ struct PDFDocumentView: UIViewRepresentable {
             DispatchQueue.main.async { [weak pdfView] in
                 guard let pdfView,
                       let page = pdfView.document?.page(at: pageIndex) else { return }
+                pdfView.layoutIfNeeded()
+                if self.isReaderFocused {
+                    pdfView.autoScales = false
+                    pdfView.scaleFactor = pdfView.scaleFactorForSizeToFit
+                } else {
+                    pdfView.autoScales = true
+                }
                 pdfView.go(to: page)
             }
         }
