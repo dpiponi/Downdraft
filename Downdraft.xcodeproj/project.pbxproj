@@ -94,10 +94,11 @@
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 				A00000000000000000000005 = {
-						CreatedOnToolsVersion = 26.0;
-					};
+					CreatedOnToolsVersion = 26.0;
+					SystemCapabilities = {com.apple.ApplicationGroups.iOS = {enabled = 1; }; };
 				};
-				B00000000000000000000006 = {CreatedOnToolsVersion = 26.0;};
+				B00000000000000000000006 = {CreatedOnToolsVersion = 26.0; SystemCapabilities = {com.apple.ApplicationGroups.iOS = {enabled = 1; }; };};
+			};
 			};
 			buildConfigurationList = A0000000000000000000000B /* Build configuration list for PBXProject "Downdraft" */;
 			developmentRegion = en;
