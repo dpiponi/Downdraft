@@ -55,9 +55,11 @@ enum RecentDocumentStore {
                 y: (targetSize.height - renderedSize.height) / 2
             )
             let context = rendererContext.cgContext
-            context.translateBy(x: origin.x, y: origin.y + renderedSize.height)
+            context.translateBy(
+                x: origin.x - pageBounds.minX * scale,
+                y: origin.y + renderedSize.height + pageBounds.minY * scale
+            )
             context.scaleBy(x: scale, y: -scale)
-            context.translateBy(x: -pageBounds.minX, y: -pageBounds.maxY)
             page.draw(with: .mediaBox, to: context)
         }
         return image.pngData()
