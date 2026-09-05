@@ -33,48 +33,51 @@ struct ContentView: View {
                         description: Text("Choose a PDF from Files to begin reading.")
                     )
                 } else {
-                    VStack(spacing: 0) {
-                        if !isReaderFocused {
-                            DocumentTabStrip(
-                                documents: documents,
-                                selectedID: selectedDocumentID,
-                                select: selectDocument,
-                                close: close
-                            )
-                        }
-
-                        // Keep every PDFView in the hierarchy, so switching tabs
-                        // retains its zoom level and reading position.
-                        ZStack {
-                            ForEach(documents) { document in
-                                if let pdfDocument = document.pdfDocument {
-                                    PDFDocumentView(
-                                        document: pdfDocument,
-                                        initialPageIndex: document.lastPageIndex,
-                                        isActive: document.id == selectedDocumentID,
-                                        isReaderFocused: isReaderFocused,
-                                        searchSelection: document.id == selectedDocumentID
-                                            ? currentSearchSelection
-                                            : nil,
-                                        searchSelections: document.id == selectedDocumentID
-                                            ? searchResults
-                                            : [],
-                                        outlineDestination: document.id == selectedDocumentID
-                                            ? outlineDestination
-                                            : nil
-                                    ) { pageIndex in
-                                        updatePage(pageIndex, for: document.id)
-                                    } onCenterTap: {
-                                        isReaderFocused.toggle()
-                                    }
-                                    .opacity(document.id == selectedDocumentID ? 1 : 0)
-                                    .allowsHitTesting(document.id == selectedDocumentID)
-                                    .accessibilityHidden(document.id != selectedDocumentID)
-                                }
+                    GeometryReader { proxy in
+                        VStack(spacing: 0) {
+                            if !isReaderFocused {
+                                DocumentTabStrip(
+                                    documents: documents,
+                                    selectedID: selectedDocumentID,
+                                    select: selectDocument,
+                                    close: close
+                                )
                             }
 
-                            if selectedDocument?.url == nil {
-                                ProgressView()
+                            // Keep every PDFView in the hierarchy, so switching tabs
+                            // retains its zoom level and reading position.
+                            ZStack {
+                                ForEach(documents) { document in
+                                    if let pdfDocument = document.pdfDocument {
+                                        PDFDocumentView(
+                                            document: pdfDocument,
+                                            initialPageIndex: document.lastPageIndex,
+                                            isActive: document.id == selectedDocumentID,
+                                            isReaderFocused: isReaderFocused,
+                                            isLandscape: proxy.size.width > proxy.size.height,
+                                            searchSelection: document.id == selectedDocumentID
+                                                ? currentSearchSelection
+                                                : nil,
+                                            searchSelections: document.id == selectedDocumentID
+                                                ? searchResults
+                                                : [],
+                                            outlineDestination: document.id == selectedDocumentID
+                                                ? outlineDestination
+                                                : nil
+                                    ) { pageIndex in
+                                            updatePage(pageIndex, for: document.id)
+                                        } onCenterTap: {
+                                            isReaderFocused.toggle()
+                                        }
+                                        .opacity(document.id == selectedDocumentID ? 1 : 0)
+                                        .allowsHitTesting(document.id == selectedDocumentID)
+                                        .accessibilityHidden(document.id != selectedDocumentID)
+                                    }
+                                }
+
+                                if selectedDocument?.url == nil {
+                                    ProgressView()
+                                }
                             }
                         }
                     }

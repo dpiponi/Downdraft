@@ -6,6 +6,7 @@ struct PDFDocumentView: UIViewRepresentable {
     var initialPageIndex = 0
     var isActive = false
     var isReaderFocused = false
+    var isLandscape = false
     var searchSelection: PDFSelection?
     var searchSelections: [PDFSelection] = []
     var outlineDestination: PDFDestination?
@@ -37,6 +38,7 @@ struct PDFDocumentView: UIViewRepresentable {
         pdfView.highlightedSelections = searchSelections
         context.coordinator.updateSearchSelection(searchSelection, in: pdfView)
         context.coordinator.updateOutlineDestination(outlineDestination, in: pdfView)
+        context.coordinator.updatePageLayout(isLandscape: isLandscape, in: pdfView)
         context.coordinator.updateReaderFocus(
             isReaderFocused,
             isActive: isActive,
@@ -54,6 +56,7 @@ struct PDFDocumentView: UIViewRepresentable {
         var onPageChanged: (Int) -> Void = { _ in }
         var onCenterTap: () -> Void = { }
         private var isReaderFocused = false
+        private var isLandscape = false
         private var displayedSearchSelection: PDFSelection?
         private var displayedOutlineDestination: PDFDestination?
         func startObservingPageChanges(in pdfView: PDFView) {
@@ -85,6 +88,16 @@ struct PDFDocumentView: UIViewRepresentable {
                 } else {
                     pdfView.autoScales = true
                 }
+            }
+        }
+
+        func updatePageLayout(isLandscape: Bool, in pdfView: PDFView) {
+            guard self.isLandscape != isLandscape else { return }
+            self.isLandscape = isLandscape
+            let currentPage = pdfView.currentPage
+            pdfView.displayMode = isLandscape ? .twoUpContinuous : .singlePageContinuous
+            if let currentPage {
+                pdfView.go(to: currentPage)
             }
         }
 
