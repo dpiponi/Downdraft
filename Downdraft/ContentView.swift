@@ -295,8 +295,11 @@ private struct TableOfContentsView: View {
                         Button(entry.title) {
                             select(destination)
                         }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.primary)
                     } else {
                         Text(entry.title)
+                            .foregroundStyle(.primary)
                     }
                 }
             }
