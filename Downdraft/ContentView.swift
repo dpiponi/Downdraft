@@ -406,21 +406,26 @@ private struct DocumentTabStrip: View {
                             Text(document.displayName)
                                 .lineLimit(1)
                                 .frame(maxWidth: 180)
+                                .fontWeight(document.id == selectedID ? .medium : .regular)
                         }
+                        .buttonStyle(.plain)
 
                         Button {
                             close(document.id)
                         } label: {
                             Image(systemName: "xmark")
                                 .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
                         }
+                        .buttonStyle(.plain)
                         .accessibilityLabel("Close \(document.displayName)")
                     }
                     .padding(.vertical, 7)
                     .padding(.leading, 10)
                     .padding(.trailing, 7)
+                    .foregroundStyle(document.id == selectedID ? .primary : .secondary)
                     .background(
-                        document.id == selectedID ? Color.accentColor.opacity(0.18) : Color.clear,
+                        document.id == selectedID ? Color.primary.opacity(0.10) : Color.clear,
                         in: Capsule()
                     )
                 }
