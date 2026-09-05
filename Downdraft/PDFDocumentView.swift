@@ -179,11 +179,23 @@ struct PDFDocumentView: UIViewRepresentable {
 extension PDFDocumentView.Coordinator: UIGestureRecognizerDelegate {
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let tapGesture = gestureRecognizer as? UITapGestureRecognizer,
-              let pdfView = tapGesture.view else { return false }
+              let pdfView = tapGesture.view as? PDFView else { return false }
         let location = tapGesture.location(in: pdfView)
         let edgeZoneHeight = pdfView.bounds.height * 0.25
-        return location.y <= edgeZoneHeight
-            || location.y >= pdfView.bounds.height - edgeZoneHeight
+        guard location.y <= edgeZoneHeight
+                || location.y >= pdfView.bounds.height - edgeZoneHeight else {
+            return false
+        }
+
+        // PDFKit's link activation is itself tap-based.  Do not let our
+        // chrome gesture recognize alongside a link, since revealing or
+        // hiding the UI changes the PDF view's size before PDFKit resolves
+        // the link destination.
+        guard let page = pdfView.page(for: location, nearest: false) else {
+            return true
+        }
+        let pointOnPage = pdfView.convert(location, to: page)
+        return page.annotation(at: pointOnPage)?.type?.lowercased() != "link"
     }
 
     func gestureRecognizer(
