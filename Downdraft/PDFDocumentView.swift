@@ -35,6 +35,7 @@ struct PDFDocumentView: UIViewRepresentable {
                 pdfView.goToFirstPage(nil)
             }
             context.coordinator.loadedDocument = document
+            context.coordinator.lastKnownPageIndex = initialPageIndex
         }
         pdfView.highlightedSelections = searchSelections
         context.coordinator.updateSearchSelection(searchSelection, in: pdfView)
@@ -65,6 +66,7 @@ struct PDFDocumentView: UIViewRepresentable {
         private var displaysAsBook = false
         private var displayedSearchSelection: PDFSelection?
         private var displayedOutlineDestination: PDFDestination?
+        var lastKnownPageIndex = 0
         func startObservingPageChanges(in pdfView: PDFView) {
             NotificationCenter.default.addObserver(
                 self,
@@ -101,11 +103,14 @@ struct PDFDocumentView: UIViewRepresentable {
             guard self.isLandscape != isLandscape || self.displaysAsBook != displaysAsBook else { return }
             self.isLandscape = isLandscape
             self.displaysAsBook = displaysAsBook
-            let currentPage = pdfView.currentPage
+            let pageIndex = pdfView.currentPage.flatMap { pdfView.document?.index(for: $0) }
+                ?? lastKnownPageIndex
             pdfView.displaysAsBook = displaysAsBook
             pdfView.displayMode = isLandscape ? .twoUpContinuous : .singlePageContinuous
-            if let currentPage {
-                pdfView.go(to: currentPage)
+            DispatchQueue.main.async { [weak pdfView] in
+                guard let pdfView,
+                      let page = pdfView.document?.page(at: pageIndex) else { return }
+                pdfView.go(to: page)
             }
         }
 
@@ -135,7 +140,9 @@ struct PDFDocumentView: UIViewRepresentable {
             guard let pdfView = notification.object as? PDFView,
                   let document = pdfView.document,
                   let page = pdfView.currentPage else { return }
-            onPageChanged(document.index(for: page))
+            let pageIndex = document.index(for: page)
+            lastKnownPageIndex = pageIndex
+            onPageChanged(pageIndex)
         }
 
         deinit {
