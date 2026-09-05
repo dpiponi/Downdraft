@@ -54,7 +54,7 @@ private struct RecentDocumentsWidgetView: View {
             ContentUnavailableView("No Recent PDFs", systemImage: "doc.richtext")
                 .containerBackground(.fill.tertiary, for: .widget)
         } else {
-            HStack(spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
                 ForEach(documents) { document in
                     Link(destination: URL(string: "downdraft://open?id=\(document.id.uuidString)")!) {
                         VStack(alignment: .leading, spacing: 6) {
@@ -78,8 +78,10 @@ private struct RecentDocumentsWidgetView: View {
                                 .font(.caption)
                                 .lineLimit(2)
                                 .foregroundStyle(.primary)
+                                .frame(height: 30, alignment: .topLeading)
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
             .containerBackground(.fill.tertiary, for: .widget)
