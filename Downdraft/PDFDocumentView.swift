@@ -64,6 +64,7 @@ struct PDFDocumentView: UIViewRepresentable {
         var onPageChanged: (Int) -> Void = { _ in }
         var onCenterTap: () -> Void = { }
         private var isReaderFocused = false
+        private var appliedReaderFocus: Bool?
         private var isLandscape = false
         private var displaysAsBook = false
         private var displayedSearchSelection: PDFSelection?
@@ -87,9 +88,9 @@ struct PDFDocumentView: UIViewRepresentable {
         }
 
         func updateReaderFocus(_ isFocused: Bool, isActive: Bool, in pdfView: PDFView) {
-            guard isReaderFocused != isFocused || isActive else { return }
             isReaderFocused = isFocused
-            guard isActive else { return }
+            guard isActive, appliedReaderFocus != isFocused else { return }
+            appliedReaderFocus = isFocused
 
             DispatchQueue.main.async { [weak pdfView] in
                 guard let pdfView else { return }
