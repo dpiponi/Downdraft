@@ -69,7 +69,13 @@ struct PDFDocumentView: UIViewRepresentable {
             let tapGesture = UITapGestureRecognizer(target: self, action: #selector(centerTapped))
             tapGesture.cancelsTouchesInView = false
             tapGesture.delegate = self
+            let doubleTapGesture = UITapGestureRecognizer(target: self, action: #selector(doubleTapped))
+            doubleTapGesture.numberOfTapsRequired = 2
+            doubleTapGesture.cancelsTouchesInView = false
+            doubleTapGesture.delegate = self
+            tapGesture.require(toFail: doubleTapGesture)
             pdfView.addGestureRecognizer(tapGesture)
+            pdfView.addGestureRecognizer(doubleTapGesture)
         }
 
         func updateReaderFocus(_ isFocused: Bool, isActive: Bool, in pdfView: PDFView) {
@@ -109,6 +115,11 @@ struct PDFDocumentView: UIViewRepresentable {
             onCenterTap()
         }
 
+        @objc private func doubleTapped() {
+            // PDFKit handles the actual double-tap zoom. This recognizer only
+            // prevents the single-tap reader-mode action from firing first.
+        }
+
         @MainActor @objc private func pageChanged(_ notification: Notification) {
             guard let pdfView = notification.object as? PDFView,
                   let document = pdfView.document,
@@ -131,5 +142,12 @@ extension PDFDocumentView.Coordinator: UIGestureRecognizerDelegate {
             dx: pdfView.bounds.width * 0.25,
             dy: pdfView.bounds.height * 0.25
         ).contains(location)
+    }
+
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        true
     }
 }
