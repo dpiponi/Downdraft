@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var isShowingContents = false
     @State private var outlineDestination: PDFDestination?
     @State private var treatsFirstPageAsCover = true
+    @State private var scrubbedPageIndex = 0
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -66,6 +67,9 @@ struct ContentView: View {
                                                 : [],
                                             outlineDestination: document.id == selectedDocumentID
                                                 ? outlineDestination
+                                                : nil,
+                                            requestedPageIndex: document.id == selectedDocumentID
+                                                ? scrubbedPageIndex
                                                 : nil
                                     ) { pageIndex in
                                             updatePage(pageIndex, for: document.id)
@@ -81,6 +85,14 @@ struct ContentView: View {
                                 if selectedDocument?.url == nil {
                                     ProgressView()
                                 }
+                            }
+
+                            if !isReaderFocused, let document = selectedDocument,
+                               let pdfDocument = document.pdfDocument {
+                                PageScrubber(
+                                    pageIndex: $scrubbedPageIndex,
+                                    pageCount: pdfDocument.pageCount
+                                )
                             }
                         }
                     }
@@ -232,6 +244,7 @@ struct ContentView: View {
         }
         selectedDocumentID = id
         treatsFirstPageAsCover = document.displaysAsBook
+        scrubbedPageIndex = document.lastPageIndex
         RecentDocumentStore.record(
             id: document.id,
             name: document.displayName,
@@ -287,11 +300,40 @@ struct ContentView: View {
         guard let document = documents.first(where: { $0.id == id }),
               document.lastPageIndex != pageIndex else { return }
         document.lastPageIndex = pageIndex
+        if id == selectedDocumentID {
+            scrubbedPageIndex = pageIndex
+        }
         saveDocuments()
     }
 
     private func saveDocuments() {
         OpenDocument.save(documents)
+    }
+}
+
+private struct PageScrubber: View {
+    @Binding var pageIndex: Int
+    let pageCount: Int
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("Page \(pageIndex + 1) of \(pageCount)")
+                .font(.caption)
+                .monospacedDigit()
+                .frame(width: 104, alignment: .leading)
+
+            Slider(
+                value: Binding(
+                    get: { Double(pageIndex) },
+                    set: { pageIndex = Int($0.rounded()) }
+                ),
+                in: 0...Double(max(pageCount - 1, 0)),
+                step: 1
+            )
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(.bar)
     }
 }
 

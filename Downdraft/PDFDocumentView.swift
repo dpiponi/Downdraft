@@ -11,6 +11,7 @@ struct PDFDocumentView: UIViewRepresentable {
     var searchSelection: PDFSelection?
     var searchSelections: [PDFSelection] = []
     var outlineDestination: PDFDestination?
+    var requestedPageIndex: Int?
     var onPageChanged: (Int) -> Void = { _ in }
     var onCenterTap: () -> Void = { }
 
@@ -40,6 +41,7 @@ struct PDFDocumentView: UIViewRepresentable {
         pdfView.highlightedSelections = searchSelections
         context.coordinator.updateSearchSelection(searchSelection, in: pdfView)
         context.coordinator.updateOutlineDestination(outlineDestination, in: pdfView)
+        context.coordinator.updateRequestedPage(requestedPageIndex, in: pdfView)
         context.coordinator.updatePageLayout(
             isLandscape: isLandscape,
             displaysAsBook: displaysAsBook,
@@ -66,6 +68,7 @@ struct PDFDocumentView: UIViewRepresentable {
         private var displaysAsBook = false
         private var displayedSearchSelection: PDFSelection?
         private var displayedOutlineDestination: PDFDestination?
+        private var displayedRequestedPageIndex: Int?
         var lastKnownPageIndex = 0
         func startObservingPageChanges(in pdfView: PDFView) {
             NotificationCenter.default.addObserver(
@@ -132,6 +135,13 @@ struct PDFDocumentView: UIViewRepresentable {
             if let destination {
                 pdfView.go(to: destination)
             }
+        }
+
+        func updateRequestedPage(_ pageIndex: Int?, in pdfView: PDFView) {
+            guard let pageIndex, displayedRequestedPageIndex != pageIndex,
+                  let page = pdfView.document?.page(at: pageIndex) else { return }
+            displayedRequestedPageIndex = pageIndex
+            pdfView.go(to: page)
         }
 
         @objc private func centerTapped() {
