@@ -207,8 +207,12 @@ struct ContentView: View {
     }
 
     private func open(_ url: URL) {
-        if let existingDocument = documents.first(where: { $0.url == url }) {
-            selectedDocumentID = existingDocument.id
+        let matchingDocuments = documents.filter { $0.matches(url) }
+        if let existingDocument = matchingDocuments.first {
+            for duplicate in matchingDocuments.dropFirst() {
+                close(duplicate.id)
+            }
+            selectDocument(existingDocument.id)
             return
         }
 
@@ -400,6 +404,7 @@ private final class OpenDocument: Identifiable {
     private(set) var pdfDocument: PDFDocument?
     let bookmarkData: Data
     let displayName: String
+    let originalURLString: String
     var lastPageIndex: Int
     var displaysAsBook: Bool
     private var isAccessingFile: Bool
@@ -408,6 +413,7 @@ private final class OpenDocument: Identifiable {
         url: URL?,
         bookmarkData: Data,
         displayName: String,
+        originalURLString: String,
         lastPageIndex: Int = 0,
         displaysAsBook: Bool = true,
         isAccessingFile: Bool
@@ -415,6 +421,7 @@ private final class OpenDocument: Identifiable {
         self.url = url
         self.bookmarkData = bookmarkData
         self.displayName = displayName
+        self.originalURLString = originalURLString
         self.lastPageIndex = lastPageIndex
         self.displaysAsBook = displaysAsBook
         self.isAccessingFile = isAccessingFile
@@ -433,6 +440,7 @@ private final class OpenDocument: Identifiable {
             url: url,
             bookmarkData: bookmarkData,
             displayName: url.deletingPathExtension().lastPathComponent,
+            originalURLString: url.standardizedFileURL.absoluteString,
             isAccessingFile: true
         )
     }
@@ -442,6 +450,11 @@ private final class OpenDocument: Identifiable {
         url.stopAccessingSecurityScopedResource()
         isAccessingFile = false
         pdfDocument = nil
+    }
+
+    func matches(_ otherURL: URL) -> Bool {
+        originalURLString == otherURL.standardizedFileURL.absoluteString
+            || url?.standardizedFileURL == otherURL.standardizedFileURL
     }
 
     func loadFileIfNeeded() -> Bool {
@@ -473,6 +486,7 @@ private final class OpenDocument: Identifiable {
     private struct SavedDocument: Codable {
         let bookmarkData: Data
         let displayName: String
+        let originalURLString: String?
         let lastPageIndex: Int
         let displaysAsBook: Bool?
     }
@@ -484,6 +498,7 @@ private final class OpenDocument: Identifiable {
             SavedDocument(
                 bookmarkData: $0.bookmarkData,
                 displayName: $0.displayName,
+                originalURLString: $0.originalURLString,
                 lastPageIndex: $0.lastPageIndex,
                 displaysAsBook: $0.displaysAsBook
             )
@@ -503,6 +518,7 @@ private final class OpenDocument: Identifiable {
                 url: nil,
                 bookmarkData: savedDocument.bookmarkData,
                 displayName: savedDocument.displayName,
+                originalURLString: savedDocument.originalURLString ?? "",
                 lastPageIndex: savedDocument.lastPageIndex,
                 displaysAsBook: savedDocument.displaysAsBook ?? true,
                 isAccessingFile: false
