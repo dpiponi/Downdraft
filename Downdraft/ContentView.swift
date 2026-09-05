@@ -1,5 +1,6 @@
 import PDFKit
 import SwiftUI
+import WidgetKit
 import UniformTypeIdentifiers
 
 struct ContentView: View {
@@ -168,6 +169,17 @@ struct ContentView: View {
                 selectDocument(firstDocument.id)
             }
         }
+        .onOpenURL { url in
+            guard url.scheme == "downdraft",
+                  url.host == "open",
+                  let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                  let idString = components.queryItems?.first(where: { $0.name == "id" })?.value,
+                  let id = UUID(uuidString: idString),
+                  let recentDocument = RecentDocumentStore.documents.first(where: { $0.id == id }) else {
+                return
+            }
+            openBookmark(recentDocument.bookmarkData)
+        }
     }
 
     private func handleFileImport(_ result: Result<[URL], Error>) {
@@ -220,6 +232,12 @@ struct ContentView: View {
         }
         selectedDocumentID = id
         treatsFirstPageAsCover = document.displaysAsBook
+        RecentDocumentStore.record(
+            id: document.id,
+            name: document.displayName,
+            bookmarkData: document.bookmarkData,
+            document: document.pdfDocument
+        )
         outlineDestination = nil
         clearSearch()
     }
@@ -249,6 +267,20 @@ struct ContentView: View {
         treatsFirstPageAsCover = value
         selectedDocument?.displaysAsBook = value
         saveDocuments()
+    }
+
+    private func openBookmark(_ bookmarkData: Data) {
+        var isStale = false
+        guard let url = try? URL(
+            resolvingBookmarkData: bookmarkData,
+            options: [],
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ) else {
+            errorMessage = "The PDF is no longer available in Files."
+            return
+        }
+        open(url)
     }
 
     private func updatePage(_ pageIndex: Int, for id: OpenDocument.ID) {
