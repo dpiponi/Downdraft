@@ -23,9 +23,7 @@ enum RecentDocumentStore {
     }
 
     static func record(id: UUID, name: String, bookmarkData: Data, document: PDFDocument?) {
-        let thumbnailData = document?.page(at: 0)?
-            .thumbnail(of: CGSize(width: 240, height: 320), for: .mediaBox)
-            .pngData()
+        let thumbnailData = thumbnailData(for: document?.page(at: 0))
         let recentDocument = RecentDocument(
             id: id,
             displayName: name,
@@ -38,5 +36,30 @@ enum RecentDocumentStore {
         guard let data = try? encoder.encode(Array(updated.prefix(4))) else { return }
         UserDefaults(suiteName: appGroupID)?.set(data, forKey: key)
         WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    private static func thumbnailData(for page: PDFPage?) -> Data? {
+        guard let page else { return nil }
+        let pageBounds = page.bounds(for: .mediaBox)
+        guard !pageBounds.isEmpty else { return nil }
+
+        let targetSize = CGSize(width: 240, height: 320)
+        let image = UIGraphicsImageRenderer(size: targetSize).image { rendererContext in
+            UIColor.white.setFill()
+            rendererContext.cgContext.fill(CGRect(origin: .zero, size: targetSize))
+
+            let scale = min(targetSize.width / pageBounds.width, targetSize.height / pageBounds.height)
+            let renderedSize = CGSize(width: pageBounds.width * scale, height: pageBounds.height * scale)
+            let origin = CGPoint(
+                x: (targetSize.width - renderedSize.width) / 2,
+                y: (targetSize.height - renderedSize.height) / 2
+            )
+            let context = rendererContext.cgContext
+            context.translateBy(x: origin.x, y: origin.y + renderedSize.height)
+            context.scaleBy(x: scale, y: -scale)
+            context.translateBy(x: -pageBounds.minX, y: -pageBounds.maxY)
+            page.draw(with: .mediaBox, to: context)
+        }
+        return image.pngData()
     }
 }
