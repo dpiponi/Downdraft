@@ -124,7 +124,7 @@ struct PDFDocumentView: UIViewRepresentable {
 
         private func showLayoutSnapshot(over pdfView: PDFView) {
             layoutSnapshot?.removeFromSuperview()
-            guard let snapshot = pdfView.snapshotView(afterScreenUpdates: false) else { return }
+            guard let snapshot = pdfView.snapshotView(afterScreenUpdates: true) else { return }
             snapshot.frame = pdfView.bounds
             snapshot.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             pdfView.addSubview(snapshot)
