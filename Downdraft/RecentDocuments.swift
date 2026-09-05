@@ -55,7 +55,7 @@ enum RecentDocumentStore {
             UIColor.white.setFill()
             rendererContext.cgContext.fill(CGRect(origin: .zero, size: targetSize))
 
-            let scale = min(targetSize.width / pageBounds.width, targetSize.height / pageBounds.height)
+            let scale = max(targetSize.width / pageBounds.width, targetSize.height / pageBounds.height)
             let renderedSize = CGSize(width: pageBounds.width * scale, height: pageBounds.height * scale)
             let origin = CGPoint(
                 x: (targetSize.width - renderedSize.width) / 2,
