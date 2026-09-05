@@ -7,6 +7,7 @@ struct PDFDocumentView: UIViewRepresentable {
     var isActive = false
     var isReaderFocused = false
     var isLandscape = false
+    var displaysAsBook = true
     var searchSelection: PDFSelection?
     var searchSelections: [PDFSelection] = []
     var outlineDestination: PDFDestination?
@@ -38,7 +39,11 @@ struct PDFDocumentView: UIViewRepresentable {
         pdfView.highlightedSelections = searchSelections
         context.coordinator.updateSearchSelection(searchSelection, in: pdfView)
         context.coordinator.updateOutlineDestination(outlineDestination, in: pdfView)
-        context.coordinator.updatePageLayout(isLandscape: isLandscape, in: pdfView)
+        context.coordinator.updatePageLayout(
+            isLandscape: isLandscape,
+            displaysAsBook: displaysAsBook,
+            in: pdfView
+        )
         context.coordinator.updateReaderFocus(
             isReaderFocused,
             isActive: isActive,
@@ -57,6 +62,7 @@ struct PDFDocumentView: UIViewRepresentable {
         var onCenterTap: () -> Void = { }
         private var isReaderFocused = false
         private var isLandscape = false
+        private var displaysAsBook = false
         private var displayedSearchSelection: PDFSelection?
         private var displayedOutlineDestination: PDFDestination?
         func startObservingPageChanges(in pdfView: PDFView) {
@@ -91,10 +97,12 @@ struct PDFDocumentView: UIViewRepresentable {
             }
         }
 
-        func updatePageLayout(isLandscape: Bool, in pdfView: PDFView) {
-            guard self.isLandscape != isLandscape else { return }
+        func updatePageLayout(isLandscape: Bool, displaysAsBook: Bool, in pdfView: PDFView) {
+            guard self.isLandscape != isLandscape || self.displaysAsBook != displaysAsBook else { return }
             self.isLandscape = isLandscape
+            self.displaysAsBook = displaysAsBook
             let currentPage = pdfView.currentPage
+            pdfView.displaysAsBook = displaysAsBook
             pdfView.displayMode = isLandscape ? .twoUpContinuous : .singlePageContinuous
             if let currentPage {
                 pdfView.go(to: currentPage)

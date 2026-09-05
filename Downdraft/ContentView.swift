@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var currentSearchResultIndex = 0
     @State private var isShowingContents = false
     @State private var outlineDestination: PDFDestination?
+    @State private var treatsFirstPageAsCover = true
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -55,6 +56,7 @@ struct ContentView: View {
                                             isActive: document.id == selectedDocumentID,
                                             isReaderFocused: isReaderFocused,
                                             isLandscape: proxy.size.width > proxy.size.height,
+                                            displaysAsBook: treatsFirstPageAsCover,
                                             searchSelection: document.id == selectedDocumentID
                                                 ? currentSearchSelection
                                                 : nil,
@@ -108,6 +110,19 @@ struct ContentView: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Contents", systemImage: "list.bullet") {
                             isShowingContents = true
+                        }
+                    }
+                }
+                if selectedDocument != nil {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu("Page Layout", systemImage: "rectangle.split.2x1") {
+                            Button(
+                                treatsFirstPageAsCover
+                                    ? "Include First Page in Spread"
+                                    : "First Page Is a Cover"
+                            ) {
+                                setFirstPageCover(!treatsFirstPageAsCover)
+                            }
                         }
                     }
                 }
@@ -201,6 +216,7 @@ struct ContentView: View {
             return
         }
         selectedDocumentID = id
+        treatsFirstPageAsCover = document.displaysAsBook
         outlineDestination = nil
         clearSearch()
     }
@@ -224,6 +240,12 @@ struct ContentView: View {
     private func clearSearch() {
         searchResults = []
         currentSearchResultIndex = 0
+    }
+
+    private func setFirstPageCover(_ value: Bool) {
+        treatsFirstPageAsCover = value
+        selectedDocument?.displaysAsBook = value
+        saveDocuments()
     }
 
     private func updatePage(_ pageIndex: Int, for id: OpenDocument.ID) {
@@ -294,13 +316,22 @@ private final class OpenDocument: Identifiable {
     let bookmarkData: Data
     let displayName: String
     var lastPageIndex: Int
+    var displaysAsBook: Bool
     private var isAccessingFile: Bool
 
-    init(url: URL?, bookmarkData: Data, displayName: String, lastPageIndex: Int = 0, isAccessingFile: Bool) {
+    init(
+        url: URL?,
+        bookmarkData: Data,
+        displayName: String,
+        lastPageIndex: Int = 0,
+        displaysAsBook: Bool = true,
+        isAccessingFile: Bool
+    ) {
         self.url = url
         self.bookmarkData = bookmarkData
         self.displayName = displayName
         self.lastPageIndex = lastPageIndex
+        self.displaysAsBook = displaysAsBook
         self.isAccessingFile = isAccessingFile
     }
 
@@ -358,6 +389,7 @@ private final class OpenDocument: Identifiable {
         let bookmarkData: Data
         let displayName: String
         let lastPageIndex: Int
+        let displaysAsBook: Bool?
     }
 
     private static let savedDocumentsKey = "openDocuments"
@@ -367,7 +399,8 @@ private final class OpenDocument: Identifiable {
             SavedDocument(
                 bookmarkData: $0.bookmarkData,
                 displayName: $0.displayName,
-                lastPageIndex: $0.lastPageIndex
+                lastPageIndex: $0.lastPageIndex,
+                displaysAsBook: $0.displaysAsBook
             )
         }
         guard let data = try? JSONEncoder().encode(savedDocuments) else { return }
@@ -386,6 +419,7 @@ private final class OpenDocument: Identifiable {
                 bookmarkData: savedDocument.bookmarkData,
                 displayName: savedDocument.displayName,
                 lastPageIndex: savedDocument.lastPageIndex,
+                displaysAsBook: savedDocument.displaysAsBook ?? true,
                 isAccessingFile: false
             )
         }
