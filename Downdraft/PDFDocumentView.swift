@@ -138,7 +138,11 @@ struct PDFDocumentView: UIViewRepresentable {
         }
 
         func updateRequestedPage(_ pageIndex: Int?, in pdfView: PDFView) {
-            guard let pageIndex, displayedRequestedPageIndex != pageIndex,
+            guard let pageIndex else {
+                displayedRequestedPageIndex = nil
+                return
+            }
+            guard displayedRequestedPageIndex != pageIndex,
                   let page = pdfView.document?.page(at: pageIndex) else { return }
             displayedRequestedPageIndex = pageIndex
             pdfView.go(to: page)
