@@ -174,7 +174,9 @@ extension PDFDocumentView.Coordinator: UIGestureRecognizerDelegate {
         guard let tapGesture = gestureRecognizer as? UITapGestureRecognizer,
               let pdfView = tapGesture.view else { return false }
         let location = tapGesture.location(in: pdfView)
-        return location.y <= pdfView.bounds.height * 0.25
+        let edgeZoneHeight = pdfView.bounds.height * 0.25
+        return location.y <= edgeZoneHeight
+            || location.y >= pdfView.bounds.height - edgeZoneHeight
     }
 
     func gestureRecognizer(
