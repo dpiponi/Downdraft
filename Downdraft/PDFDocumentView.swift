@@ -41,9 +41,7 @@ struct PDFDocumentView: UIViewRepresentable {
             context.coordinator.loadedDocument = document
             context.coordinator.lastKnownPageIndex = initialPageIndex
         }
-        // PDFKit draws all supplied search results alike.  Leave the active
-        // result to our overlay so it has a clearly different treatment.
-        pdfView.highlightedSelections = searchSelections.filter { $0 !== searchSelection }
+        pdfView.highlightedSelections = searchSelections
         context.coordinator.updateSearchSelection(searchSelection, in: pdfView)
         context.coordinator.updateOutlineDestination(outlineDestination, in: pdfView)
         context.coordinator.updateRequestedPage(requestedPageIndex, in: pdfView)
@@ -139,16 +137,9 @@ struct PDFDocumentView: UIViewRepresentable {
         func updateSearchSelection(_ selection: PDFSelection?, in pdfView: PDFView) {
             guard displayedSearchSelection !== selection else { return }
             displayedSearchSelection = selection
-            (pdfView as? PagePreservingPDFView)?.currentSearchSelection = selection
             pdfView.currentSelection = selection
             if let selection {
                 pdfView.go(to: selection)
-                // `go(to:)` scrolls PDFKit's internal view after this call
-                // returns. Reproject the overlay on the next run-loop turn,
-                // once its page coordinate system has caught up.
-                DispatchQueue.main.async { [weak pdfView] in
-                    (pdfView as? PagePreservingPDFView)?.refreshCurrentSearchHighlight()
-                }
             }
         }
 
@@ -177,7 +168,6 @@ struct PDFDocumentView: UIViewRepresentable {
                   let page = pdfView.currentPage else { return }
             let pageIndex = document.index(for: page)
             lastKnownPageIndex = pageIndex
-            (pdfView as? PagePreservingPDFView)?.refreshCurrentSearchHighlight()
             onPageChanged(pageIndex)
         }
 
@@ -215,57 +205,9 @@ extension PDFDocumentView.Coordinator: UIGestureRecognizerDelegate {
 }
 
 private final class PagePreservingPDFView: PDFView {
-    var currentSearchSelection: PDFSelection? {
-        didSet { updateCurrentSearchHighlight() }
-    }
-
-    private let currentSearchHighlightLayer = CAShapeLayer()
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        clipsToBounds = true
-        currentSearchHighlightLayer.fillColor = UIColor.systemOrange.withAlphaComponent(0.24).cgColor
-        currentSearchHighlightLayer.strokeColor = UIColor.systemOrange.cgColor
-        currentSearchHighlightLayer.lineWidth = 3
-        currentSearchHighlightLayer.lineJoin = .round
-        currentSearchHighlightLayer.shadowColor = UIColor.black.cgColor
-        currentSearchHighlightLayer.shadowOpacity = 0.3
-        currentSearchHighlightLayer.shadowRadius = 2
-        currentSearchHighlightLayer.shadowOffset = .zero
-        currentSearchHighlightLayer.zPosition = .greatestFiniteMagnitude
-        layer.addSublayer(currentSearchHighlightLayer)
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
     override func layoutSubviews() {
         super.layoutSubviews()
         disableScrollToTop(in: self)
-        updateCurrentSearchHighlight()
-    }
-
-    func refreshCurrentSearchHighlight() {
-        updateCurrentSearchHighlight()
-    }
-
-    private func updateCurrentSearchHighlight() {
-        guard let selection = currentSearchSelection else {
-            currentSearchHighlightLayer.path = nil
-            return
-        }
-
-        let path = CGMutablePath()
-        for page in selection.pages {
-            let pageBounds = selection.bounds(for: page)
-            guard !pageBounds.isNull, !pageBounds.isEmpty else { continue }
-            let boundsInView = convert(pageBounds, from: page).insetBy(dx: -3, dy: -2)
-            guard boundsInView.intersects(bounds) else { continue }
-            let visibleBounds = boundsInView.intersection(bounds)
-            path.addPath(UIBezierPath(roundedRect: visibleBounds, cornerRadius: 4).cgPath)
-        }
-        currentSearchHighlightLayer.path = path
     }
 
     private func disableScrollToTop(in view: UIView) {
