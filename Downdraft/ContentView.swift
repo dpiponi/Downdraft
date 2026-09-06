@@ -32,6 +32,10 @@ struct ContentView: View {
         return searchResults[currentSearchResultIndex]
     }
 
+    private var isPhone: Bool {
+        UIDevice.current.userInterfaceIdiom == .phone
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -44,7 +48,7 @@ struct ContentView: View {
                 } else {
                     GeometryReader { _ in
                         VStack(spacing: 0) {
-                            if !isReaderFocused {
+                            if !isReaderFocused && !isPhone {
                                 DocumentTabStrip(
                                     documents: documents,
                                     selectedID: selectedDocumentID,
@@ -101,14 +105,53 @@ struct ContentView: View {
                         isShowingFilePicker = true
                     }
                 }
-                if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
+                if isPhone {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Menu(selectedDocument?.displayName ?? "Documents", systemImage: "doc.on.doc") {
+                            ForEach(documents) { document in
+                                Button(document.displayName) {
+                                    selectDocument(document.id)
+                                }
+                            }
+                            if selectedDocument != nil {
+                                Divider()
+                                Button("Close Current Document", role: .destructive) {
+                                    if let id = selectedDocumentID { close(id) }
+                                }
+                            }
+                        }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu("More", systemImage: "ellipsis.circle") {
+                            if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
+                                Button("Contents", systemImage: "list.bullet") {
+                                    isShowingContents = true
+                                }
+                            }
+                            if selectedDocument != nil {
+                                Menu("Bookmarks", systemImage: "bookmark") {
+                                    ForEach(0..<3, id: \.self) { index in
+                                        Button("Go to Bookmark \(index + 1)") {
+                                            goToBookmark(at: index)
+                                        }
+                                        .disabled(bookmarkPageIndices[index] == nil)
+                                        Button("Save Current Page as Bookmark \(index + 1)") {
+                                            storeBookmark(at: index)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if !isPhone, selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Contents", systemImage: "list.bullet") {
                             isShowingContents = true
                         }
                     }
                 }
-                if selectedDocument != nil {
+                if !isPhone, selectedDocument != nil {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
                             setFirstPageCover(!treatsFirstPageAsCover)
@@ -124,7 +167,7 @@ struct ContentView: View {
                         )
                     }
                 }
-                if selectedDocument != nil {
+                if !isPhone, selectedDocument != nil {
                     ToolbarItemGroup(placement: .topBarTrailing) {
                         ForEach(0..<3, id: \.self) { index in
                             BookmarkSlotButton(
@@ -136,7 +179,7 @@ struct ContentView: View {
                         }
                     }
                 }
-                if !searchResults.isEmpty || selectedDocument != nil {
+                if !isPhone, !searchResults.isEmpty || selectedDocument != nil {
                     // The search field occupies the far trailing position.
                     // Keep its navigation controls directly beside it.
                     ToolbarItemGroup(placement: .topBarTrailing) {
@@ -168,11 +211,40 @@ struct ContentView: View {
                         }
                     }
                 }
+                if isPhone, !searchResults.isEmpty || selectedDocument != nil {
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        if let document = selectedDocument {
+                            let historyControlsAreCurrent = navigationRevision >= 0
+                            Button("Back", systemImage: "chevron.backward") {
+                                navigateBack(in: document)
+                            }
+                            .disabled(!document.canNavigateBack || !historyControlsAreCurrent)
+
+                            Button("Forward", systemImage: "chevron.forward") {
+                                navigateForward(in: document)
+                            }
+                            .disabled(!document.canNavigateForward || !historyControlsAreCurrent)
+                        }
+                        if !searchResults.isEmpty {
+                            Spacer()
+                            Button("Previous match", systemImage: "chevron.up") {
+                                moveSearchResult(by: -1)
+                            }
+                            Button("Next match", systemImage: "chevron.down") {
+                                moveSearchResult(by: 1)
+                            }
+                            Text("\(currentSearchResultIndex + 1) of \(searchResults.count)")
+                                .font(.caption)
+                                .monospacedDigit()
+                        }
+                    }
+                }
             }
         }
         .searchable(text: $searchText, prompt: "Find in PDF")
         .statusBarHidden(isReaderFocused)
         .persistentSystemOverlays(isReaderFocused ? .hidden : .visible)
+        .toolbar(isReaderFocused ? .hidden : .visible, for: .bottomBar)
         .onSubmit(of: .search) {
             performSearch()
         }
@@ -246,7 +318,7 @@ struct ContentView: View {
                 initialPageIndex: document.lastPageIndex,
                 isActive: isSelected,
                 isReaderFocused: isReaderFocused,
-                isLandscape: isLandscapeInterface,
+                isLandscape: !isPhone && isLandscapeInterface,
                 displaysAsBook: treatsFirstPageAsCover,
                 searchSelection: isSelected ? currentSearchSelection : nil,
                 searchSelections: isSelected ? searchResults : [],

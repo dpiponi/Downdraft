@@ -42,12 +42,22 @@ struct DowndraftWidget: Widget {
         }
         .configurationDisplayName("Recent PDFs")
         .description("Open one of your recently read PDFs.")
-        .supportedFamilies([.systemMedium, .systemLarge])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
 
 private struct RecentDocumentsWidgetView: View {
     let documents: [RecentDocument]
+    @Environment(\.widgetFamily) private var family
+
+    private var displayedDocuments: [RecentDocument] {
+        let count = switch family {
+        case .systemSmall: 1
+        case .systemMedium: 2
+        default: 4
+        }
+        return Array(documents.prefix(count))
+    }
 
     var body: some View {
         if documents.isEmpty {
@@ -55,7 +65,7 @@ private struct RecentDocumentsWidgetView: View {
                 .containerBackground(.fill.tertiary, for: .widget)
         } else {
             HStack(alignment: .top, spacing: 10) {
-                ForEach(documents) { document in
+                ForEach(displayedDocuments) { document in
                     Link(destination: URL(string: "downdraft://open?id=\(document.id.uuidString)")!) {
                         VStack(alignment: .leading, spacing: 6) {
                             Group {
@@ -70,7 +80,7 @@ private struct RecentDocumentsWidgetView: View {
                                 }
                             }
                             .frame(maxWidth: .infinity)
-                            .frame(height: 88)
+                            .frame(height: family == .systemSmall ? 104 : 88)
                             .clipped()
                             .clipShape(RoundedRectangle(cornerRadius: 7))
 
