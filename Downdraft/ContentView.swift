@@ -213,7 +213,7 @@ struct ContentView: View {
                         }
                     }
                 }
-                if isPhone, !searchResults.isEmpty || selectedDocument != nil {
+                if isPhone, !isReaderFocused, !searchResults.isEmpty || selectedDocument != nil {
                     ToolbarItemGroup(placement: .bottomBar) {
                         if let document = selectedDocument {
                             let historyControlsAreCurrent = navigationRevision >= 0
