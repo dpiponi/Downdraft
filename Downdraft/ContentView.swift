@@ -20,6 +20,7 @@ struct ContentView: View {
     @State private var requestedPageIndex: Int?
     @State private var bookmarkPageIndices: [Int?] = [nil, nil, nil]
     @State private var navigationRevision = 0
+    @State private var scrubberRevision = 0
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -79,6 +80,7 @@ struct ContentView: View {
                                         )
                                     }
                                 )
+                                .id(scrubberRevision)
                             }
                         }
                     }
@@ -425,6 +427,7 @@ struct ContentView: View {
         guard let pageIndex = document.navigateBack(from: document.lastPageIndex) else { return }
         navigationRevision += 1
         scrubbedPageIndex = pageIndex
+        scrubberRevision += 1
         requestedPageIndex = pageIndex
     }
 
@@ -432,6 +435,7 @@ struct ContentView: View {
         guard let pageIndex = document.navigateForward(from: document.lastPageIndex) else { return }
         navigationRevision += 1
         scrubbedPageIndex = pageIndex
+        scrubberRevision += 1
         requestedPageIndex = pageIndex
     }
 
