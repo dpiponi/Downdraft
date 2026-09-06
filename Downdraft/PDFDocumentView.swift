@@ -16,7 +16,7 @@ struct PDFDocumentView: UIViewRepresentable {
     var onCenterTap: () -> Void = { }
 
     func makeUIView(context: Context) -> PDFView {
-        let view = PDFView()
+        let view = PagePreservingPDFView()
         view.autoScales = true
         view.displayDirection = .vertical
         view.displayMode = .singlePageContinuous
@@ -177,6 +177,26 @@ struct PDFDocumentView: UIViewRepresentable {
 
         deinit {
             NotificationCenter.default.removeObserver(self)
+        }
+    }
+}
+
+private final class PagePreservingPDFView: PDFView {
+    private var previousBoundsSize = CGSize.zero
+
+    override func layoutSubviews() {
+        let pageBeforeLayout = currentPage
+        let sizeChanged = previousBoundsSize != .zero && bounds.size != previousBoundsSize
+        super.layoutSubviews()
+        previousBoundsSize = bounds.size
+
+        // PDFKit can reset its scroll position while auto-scaling after an
+        // unrelated SwiftUI layout change (for example, search focus). Keep
+        // the page that was visible before the size change.
+        guard sizeChanged, let pageBeforeLayout else { return }
+        DispatchQueue.main.async { [weak self, weak pageBeforeLayout] in
+            guard let self, let pageBeforeLayout else { return }
+            self.go(to: pageBeforeLayout)
         }
     }
 }
