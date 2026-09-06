@@ -1,5 +1,6 @@
 import PDFKit
 import SwiftUI
+import UIKit
 import WidgetKit
 import UniformTypeIdentifiers
 
@@ -377,34 +378,90 @@ private struct PageScrubber: View {
     }
 }
 
-private struct BookmarkSlotButton: View {
+private struct BookmarkSlotButton: UIViewRepresentable {
     let number: Int
     let isSet: Bool
     let goToBookmark: () -> Void
     let storeBookmark: () -> Void
 
-    var body: some View {
-        Text("\(number)")
-            .font(.body.monospacedDigit())
-            .fontWeight(isSet ? .semibold : .regular)
-            .frame(minWidth: 28, minHeight: 36)
-            .contentShape(Rectangle())
-            .background {
-                if isSet {
-                    Circle()
-                        .fill(Color.accentColor.opacity(0.18))
-                }
-            }
-            .gesture(
-                LongPressGesture(minimumDuration: 0.5)
-                    .onEnded { _ in storeBookmark() }
-                    .exclusively(before: TapGesture().onEnded { goToBookmark() })
-            )
-        .accessibilityAddTraits(.isButton)
-        .accessibilityLabel("Bookmark \(number)")
-        .accessibilityHint(isSet
+    func makeUIView(context: Context) -> BookmarkSlotControl {
+        BookmarkSlotControl()
+    }
+
+    func updateUIView(_ control: BookmarkSlotControl, context: Context) {
+        control.configure(
+            number: number,
+            isSet: isSet,
+            goToBookmark: goToBookmark,
+            storeBookmark: storeBookmark
+        )
+    }
+}
+
+private final class BookmarkSlotControl: UIControl {
+    private let label = UILabel()
+    private var goToBookmark: () -> Void = { }
+    private var storeBookmark: () -> Void = { }
+    private var didStoreDuringTouch = false
+
+    override var intrinsicContentSize: CGSize {
+        CGSize(width: 36, height: 36)
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        label.textAlignment = .center
+        label.adjustsFontForContentSizeCategory = true
+        label.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(label)
+        addTarget(self, action: #selector(tapped), for: .touchUpInside)
+
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(longPressed))
+        longPress.minimumPressDuration = 0.5
+        longPress.cancelsTouchesInView = false
+        addGestureRecognizer(longPress)
+
+        isAccessibilityElement = true
+        accessibilityTraits = .button
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        label.frame = bounds
+        layer.cornerRadius = bounds.height / 2
+    }
+
+    func configure(
+        number: Int,
+        isSet: Bool,
+        goToBookmark: @escaping () -> Void,
+        storeBookmark: @escaping () -> Void
+    ) {
+        self.goToBookmark = goToBookmark
+        self.storeBookmark = storeBookmark
+        label.text = "\(number)"
+        label.font = .monospacedDigitSystemFont(ofSize: 17, weight: isSet ? .semibold : .regular)
+        backgroundColor = isSet ? tintColor.withAlphaComponent(0.18) : .clear
+        accessibilityLabel = "Bookmark \(number)"
+        accessibilityHint = isSet
             ? "Double tap to go to its saved page. Press and hold to replace it with the current page."
-            : "Press and hold to save the current page.")
+            : "Press and hold to save the current page."
+    }
+
+    @objc private func tapped() {
+        defer { didStoreDuringTouch = false }
+        guard !didStoreDuringTouch else { return }
+        goToBookmark()
+    }
+
+    @objc private func longPressed(_ recognizer: UILongPressGestureRecognizer) {
+        guard recognizer.state == .began else { return }
+        didStoreDuringTouch = true
+        storeBookmark()
     }
 }
 
