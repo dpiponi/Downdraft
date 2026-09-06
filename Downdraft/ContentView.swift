@@ -69,7 +69,15 @@ struct ContentView: View {
                                 PageScrubber(
                                     pageIndex: scrubbedPageIndex,
                                     pageCount: pdfDocument.pageCount,
-                                    seek: { navigate(to: $0) }
+                                    seek: { requestedPageIndex = $0 },
+                                    commit: { sourcePageIndex, destinationPageIndex in
+                                        guard let document = selectedDocument else { return }
+                                        recordNavigation(
+                                            in: document,
+                                            from: sourcePageIndex,
+                                            to: destinationPageIndex
+                                        )
+                                    }
                                 )
                             }
                         }
@@ -434,6 +442,9 @@ private struct PageScrubber: View {
     let pageIndex: Int
     let pageCount: Int
     let seek: (Int) -> Void
+    let commit: (Int, Int) -> Void
+    @State private var pageIndexWhenScrubbingBegan: Int?
+    @State private var pendingPageIndex: Int?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -444,11 +455,28 @@ private struct PageScrubber: View {
 
             Slider(
                 value: Binding(
-                    get: { Double(pageIndex) },
-                    set: { seek(Int($0.rounded())) }
+                    get: { Double(pendingPageIndex ?? pageIndex) },
+                    set: { newValue in
+                        let newPageIndex = Int(newValue.rounded())
+                        pendingPageIndex = newPageIndex
+                        seek(newPageIndex)
+                    }
                 ),
                 in: 0...Double(max(pageCount - 1, 0)),
-                step: 1
+                step: 1,
+                onEditingChanged: { isEditing in
+                    if isEditing {
+                        pageIndexWhenScrubbingBegan = pageIndex
+                        pendingPageIndex = pageIndex
+                        return
+                    }
+
+                    let sourcePageIndex = pageIndexWhenScrubbingBegan ?? pageIndex
+                    let destinationPageIndex = pendingPageIndex ?? pageIndex
+                    commit(sourcePageIndex, destinationPageIndex)
+                    pageIndexWhenScrubbingBegan = nil
+                    pendingPageIndex = nil
+                }
             )
         }
         .padding(.horizontal)
