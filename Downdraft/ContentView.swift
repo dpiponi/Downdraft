@@ -19,6 +19,7 @@ struct ContentView: View {
     @State private var scrubbedPageIndex = 0
     @State private var requestedPageIndex: Int?
     @State private var bookmarkPageIndices: [Int?] = [nil, nil, nil]
+    @State private var navigationRevision = 0
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -54,35 +55,7 @@ struct ContentView: View {
                             // retains its zoom level and reading position.
                             ZStack {
                                 ForEach(documents) { document in
-                                    if let pdfDocument = document.pdfDocument {
-                                        PDFDocumentView(
-                                            document: pdfDocument,
-                                            initialPageIndex: document.lastPageIndex,
-                                            isActive: document.id == selectedDocumentID,
-                                            isReaderFocused: isReaderFocused,
-                                            isLandscape: proxy.size.width > proxy.size.height,
-                                            displaysAsBook: treatsFirstPageAsCover,
-                                            searchSelection: document.id == selectedDocumentID
-                                                ? currentSearchSelection
-                                                : nil,
-                                            searchSelections: document.id == selectedDocumentID
-                                                ? searchResults
-                                                : [],
-                                            outlineDestination: document.id == selectedDocumentID
-                                                ? outlineDestination
-                                                : nil,
-                                            requestedPageIndex: document.id == selectedDocumentID
-                                                ? requestedPageIndex
-                                                : nil
-                                    ) { pageIndex in
-                                            updatePage(pageIndex, for: document.id)
-                                        } onCenterTap: {
-                                            isReaderFocused.toggle()
-                                        }
-                                        .opacity(document.id == selectedDocumentID ? 1 : 0)
-                                        .allowsHitTesting(document.id == selectedDocumentID)
-                                        .accessibilityHidden(document.id != selectedDocumentID)
-                                    }
+                                    reader(for: document, size: proxy.size)
                                 }
 
                                 if selectedDocument?.url == nil {
@@ -96,7 +69,7 @@ struct ContentView: View {
                                 PageScrubber(
                                     pageIndex: scrubbedPageIndex,
                                     pageCount: pdfDocument.pageCount,
-                                    seek: { requestedPageIndex = $0 }
+                                    seek: { navigate(to: $0) }
                                 )
                             }
                         }
@@ -126,6 +99,19 @@ struct ContentView: View {
                             .font(.caption)
                             .monospacedDigit()
                             .fixedSize(horizontal: true, vertical: false)
+                    }
+                }
+                if let document = selectedDocument {
+                    ToolbarItemGroup(placement: .topBarLeading) {
+                        Button("Back", systemImage: "chevron.backward") {
+                            navigateBack(in: document)
+                        }
+                        .disabled(!document.canNavigateBack)
+
+                        Button("Forward", systemImage: "chevron.forward") {
+                            navigateForward(in: document)
+                        }
+                        .disabled(!document.canNavigateForward)
                     }
                 }
                 if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
@@ -180,6 +166,10 @@ struct ContentView: View {
             if let outline = selectedDocument?.pdfDocument?.outlineRoot {
                 TableOfContentsView(entries: TableOfContentsEntry.children(of: outline)) { destination in
                     clearSearch()
+                    if let document = selectedDocument,
+                       let page = destination.page {
+                        navigate(to: document.pdfDocument?.index(for: page) ?? document.lastPageIndex)
+                    }
                     outlineDestination = destination
                     isShowingContents = false
                 }
@@ -218,6 +208,41 @@ struct ContentView: View {
                 return
             }
             openBookmark(recentDocument.bookmarkData)
+        }
+    }
+
+    @ViewBuilder
+    private func reader(for document: OpenDocument, size: CGSize) -> some View {
+        if let pdfDocument = document.pdfDocument {
+            let isSelected = document.id == selectedDocumentID
+            PDFDocumentView(
+                document: pdfDocument,
+                initialPageIndex: document.lastPageIndex,
+                isActive: isSelected,
+                isReaderFocused: isReaderFocused,
+                isLandscape: size.width > size.height,
+                displaysAsBook: treatsFirstPageAsCover,
+                searchSelection: isSelected ? currentSearchSelection : nil,
+                searchSelections: isSelected ? searchResults : [],
+                outlineDestination: isSelected ? outlineDestination : nil,
+                requestedPageIndex: isSelected ? requestedPageIndex : nil,
+                onPageChanged: { pageIndex in
+                    updatePage(pageIndex, for: document.id)
+                },
+                onCenterTap: {
+                    isReaderFocused.toggle()
+                },
+                onLinkNavigation: { sourcePageIndex, destinationPageIndex in
+                    recordNavigation(
+                        in: document,
+                        from: sourcePageIndex,
+                        to: destinationPageIndex
+                    )
+                }
+            )
+            .opacity(isSelected ? 1 : 0)
+            .allowsHitTesting(isSelected)
+            .accessibilityHidden(!isSelected)
         }
     }
 
@@ -304,12 +329,14 @@ struct ContentView: View {
         }
         searchResults = document.findString(query, withOptions: [.caseInsensitive])
         currentSearchResultIndex = 0
+        recordNavigation(to: searchResults.first)
     }
 
     private func moveSearchResult(by offset: Int) {
         guard !searchResults.isEmpty else { return }
         currentSearchResultIndex = (currentSearchResultIndex + offset + searchResults.count)
             % searchResults.count
+        recordNavigation(to: currentSearchSelection)
     }
 
     private func clearSearch() {
@@ -326,7 +353,7 @@ struct ContentView: View {
     private func goToBookmark(at index: Int) {
         guard let document = selectedDocument,
               let pageIndex = document.bookmarkPageIndices[index] else { return }
-        requestedPageIndex = pageIndex
+        navigate(to: pageIndex)
     }
 
     private func storeBookmark(at index: Int) {
@@ -360,6 +387,39 @@ struct ContentView: View {
             requestedPageIndex = nil
         }
         saveDocuments()
+    }
+
+    private func navigate(to pageIndex: Int) {
+        guard let document = selectedDocument else { return }
+        recordNavigation(in: document, from: document.lastPageIndex, to: pageIndex)
+        requestedPageIndex = pageIndex
+    }
+
+    private func recordNavigation(to selection: PDFSelection?) {
+        guard let document = selectedDocument,
+              let page = selection?.pages.first else { return }
+        recordNavigation(
+            in: document,
+            from: document.lastPageIndex,
+            to: document.pdfDocument?.index(for: page) ?? document.lastPageIndex
+        )
+    }
+
+    private func recordNavigation(in document: OpenDocument, from source: Int, to destination: Int) {
+        document.recordNavigation(from: source, to: destination)
+        navigationRevision += 1
+    }
+
+    private func navigateBack(in document: OpenDocument) {
+        guard let pageIndex = document.navigateBack(from: document.lastPageIndex) else { return }
+        navigationRevision += 1
+        requestedPageIndex = pageIndex
+    }
+
+    private func navigateForward(in document: OpenDocument) {
+        guard let pageIndex = document.navigateForward(from: document.lastPageIndex) else { return }
+        navigationRevision += 1
+        requestedPageIndex = pageIndex
     }
 
     private func saveDocuments() {
@@ -577,6 +637,16 @@ private final class OpenDocument: Identifiable {
     var displaysAsBook: Bool
     var bookmarkPageIndices: [Int?]
     private var isAccessingFile: Bool
+    private var navigationHistory: [Int]
+    private var navigationHistoryIndex: Int
+
+    var canNavigateBack: Bool {
+        navigationHistoryIndex > 0
+    }
+
+    var canNavigateForward: Bool {
+        navigationHistoryIndex < navigationHistory.count - 1
+    }
 
     init(
         url: URL?,
@@ -599,6 +669,8 @@ private final class OpenDocument: Identifiable {
             self.bookmarkPageIndices.append(nil)
         }
         self.isAccessingFile = isAccessingFile
+        self.navigationHistory = [lastPageIndex]
+        self.navigationHistoryIndex = 0
     }
 
     convenience init?(url: URL, isAccessingSecurityScope: Bool) {
@@ -654,6 +726,31 @@ private final class OpenDocument: Identifiable {
         isAccessingFile = isAccessingSecurityScope
         pdfDocument = PDFDocument(url: resolvedURL)
         return pdfDocument != nil
+    }
+
+    func recordNavigation(from source: Int, to destination: Int) {
+        guard source != destination else { return }
+        navigationHistory[navigationHistoryIndex] = source
+        navigationHistory.removeSubrange((navigationHistoryIndex + 1)..<navigationHistory.count)
+        navigationHistory.append(destination)
+        if navigationHistory.count > 100 {
+            navigationHistory.removeFirst(navigationHistory.count - 100)
+        }
+        navigationHistoryIndex = navigationHistory.count - 1
+    }
+
+    func navigateBack(from currentPage: Int) -> Int? {
+        guard canNavigateBack else { return nil }
+        navigationHistory[navigationHistoryIndex] = currentPage
+        navigationHistoryIndex -= 1
+        return navigationHistory[navigationHistoryIndex]
+    }
+
+    func navigateForward(from currentPage: Int) -> Int? {
+        guard canNavigateForward else { return nil }
+        navigationHistory[navigationHistoryIndex] = currentPage
+        navigationHistoryIndex += 1
+        return navigationHistory[navigationHistoryIndex]
     }
 
     deinit {

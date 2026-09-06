@@ -14,6 +14,7 @@ struct PDFDocumentView: UIViewRepresentable {
     var requestedPageIndex: Int?
     var onPageChanged: (Int) -> Void = { _ in }
     var onCenterTap: () -> Void = { }
+    var onLinkNavigation: (Int, Int) -> Void = { _, _ in }
 
     func makeUIView(context: Context) -> PDFView {
         let view = PagePreservingPDFView()
@@ -28,6 +29,7 @@ struct PDFDocumentView: UIViewRepresentable {
     func updateUIView(_ pdfView: PDFView, context: Context) {
         context.coordinator.onPageChanged = onPageChanged
         context.coordinator.onCenterTap = onCenterTap
+        context.coordinator.onLinkNavigation = onLinkNavigation
         context.coordinator.disableDoubleTapZoom(in: pdfView)
         if context.coordinator.loadedDocument !== document {
             pdfView.document = document
@@ -64,6 +66,7 @@ struct PDFDocumentView: UIViewRepresentable {
         var loadedDocument: PDFDocument?
         var onPageChanged: (Int) -> Void = { _ in }
         var onCenterTap: () -> Void = { }
+        var onLinkNavigation: (Int, Int) -> Void = { _, _ in }
         private var isReaderFocused = false
         private var appliedReaderFocus: Bool?
         private var isLandscape = false
@@ -188,7 +191,16 @@ extension PDFDocumentView.Coordinator: UIGestureRecognizerDelegate {
         let location = tapGesture.location(in: pdfView)
         guard let page = pdfView.page(for: location, nearest: false) else { return true }
         let pointOnPage = pdfView.convert(location, to: page)
-        return page.annotation(at: pointOnPage)?.type?.lowercased() != "link"
+        guard let annotation = page.annotation(at: pointOnPage),
+              annotation.type?.lowercased() == "link" else {
+            return true
+        }
+
+        if let destinationPage = annotation.destination?.page,
+           let document = pdfView.document {
+            onLinkNavigation(document.index(for: page), document.index(for: destinationPage))
+        }
+        return false
     }
 }
 
