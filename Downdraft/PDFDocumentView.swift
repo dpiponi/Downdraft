@@ -91,15 +91,20 @@ struct PDFDocumentView: UIViewRepresentable {
             isReaderFocused = isFocused
             guard isActive, appliedReaderFocus != isFocused else { return }
             appliedReaderFocus = isFocused
+            let pageIndex = pdfView.currentPage.flatMap { pdfView.document?.index(for: $0) }
+                ?? lastKnownPageIndex
 
             DispatchQueue.main.async { [weak pdfView] in
-                guard let pdfView else { return }
+                guard let pdfView,
+                      let page = pdfView.document?.page(at: pageIndex) else { return }
+                pdfView.layoutIfNeeded()
                 if isFocused {
                     pdfView.autoScales = false
                     pdfView.scaleFactor = pdfView.scaleFactorForSizeToFit
                 } else {
                     pdfView.autoScales = true
                 }
+                pdfView.go(to: page)
             }
         }
 
