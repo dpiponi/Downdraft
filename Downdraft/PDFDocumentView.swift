@@ -82,7 +82,7 @@ struct PDFDocumentView: UIViewRepresentable {
 
         func startObservingCenterTaps(in pdfView: PDFView) {
             let tapGesture = UITapGestureRecognizer(target: self, action: #selector(centerTapped))
-            tapGesture.cancelsTouchesInView = false
+            tapGesture.cancelsTouchesInView = true
             tapGesture.delegate = self
             pdfView.addGestureRecognizer(tapGesture)
         }
@@ -205,6 +205,6 @@ extension PDFDocumentView.Coordinator: UIGestureRecognizerDelegate {
         _ gestureRecognizer: UIGestureRecognizer,
         shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
     ) -> Bool {
-        true
+        false
     }
 }
