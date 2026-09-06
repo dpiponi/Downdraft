@@ -216,6 +216,7 @@ private final class PagePreservingPDFView: PDFView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        clipsToBounds = true
         currentSearchHighlightLayer.fillColor = UIColor.systemOrange.withAlphaComponent(0.24).cgColor
         currentSearchHighlightLayer.strokeColor = UIColor.systemOrange.cgColor
         currentSearchHighlightLayer.lineWidth = 3
@@ -249,7 +250,9 @@ private final class PagePreservingPDFView: PDFView {
             let pageBounds = selection.bounds(for: page)
             guard !pageBounds.isNull, !pageBounds.isEmpty else { continue }
             let boundsInView = convert(pageBounds, from: page).insetBy(dx: -3, dy: -2)
-            path.addPath(UIBezierPath(roundedRect: boundsInView, cornerRadius: 4).cgPath)
+            guard boundsInView.intersects(bounds) else { continue }
+            let visibleBounds = boundsInView.intersection(bounds)
+            path.addPath(UIBezierPath(roundedRect: visibleBounds, cornerRadius: 4).cgPath)
         }
         currentSearchHighlightLayer.path = path
     }
