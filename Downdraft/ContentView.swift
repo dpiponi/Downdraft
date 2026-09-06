@@ -381,12 +381,17 @@ private struct BookmarkSlotButton: View {
     let storeBookmark: () -> Void
 
     var body: some View {
-        Button(action: goToBookmark) {
-            Text("\(number)")
-                .font(.body.monospacedDigit())
-                .fontWeight(isSet ? .semibold : .regular)
-        }
-        .onLongPressGesture(minimumDuration: 0.5, perform: storeBookmark)
+        Text("\(number)")
+            .font(.body.monospacedDigit())
+            .fontWeight(isSet ? .semibold : .regular)
+            .frame(minWidth: 28, minHeight: 36)
+            .contentShape(Rectangle())
+            .gesture(
+                LongPressGesture(minimumDuration: 0.5)
+                    .onEnded { _ in storeBookmark() }
+                    .exclusively(before: TapGesture().onEnded { goToBookmark() })
+            )
+        .accessibilityAddTraits(.isButton)
         .accessibilityLabel("Bookmark \(number)")
         .accessibilityHint(isSet
             ? "Double tap to go to its saved page. Press and hold to replace it with the current page."
