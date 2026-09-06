@@ -105,6 +105,10 @@ struct ContentView: View {
                 }
             }
             .toolbar(isReaderFocused ? .hidden : .visible, for: .navigationBar)
+            .toolbarBackground(
+                isReaderFocused ? .hidden : .visible,
+                for: .navigationBar
+            )
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Open PDF", systemImage: "folder") {
