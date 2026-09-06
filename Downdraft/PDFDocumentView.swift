@@ -85,9 +85,19 @@ struct PDFDocumentView: UIViewRepresentable {
         func startObservingCenterTaps(in pdfView: PDFView) {
             let tapGesture = UITapGestureRecognizer(target: self, action: #selector(centerTapped))
             tapGesture.cancelsTouchesInView = true
+            tapGesture.delaysTouchesEnded = true
             tapGesture.delegate = self
             pdfView.addGestureRecognizer(tapGesture)
             centerTapGesture = tapGesture
+
+            // PDFKit finishes creating some of its private page views on a
+            // later run-loop turn.  Apply the failure relationship again
+            // once those recognisers exist; otherwise its page-turn tap can
+            // still receive the same touch as our reader-chrome tap.
+            DispatchQueue.main.async { [weak self, weak pdfView] in
+                guard let self, let pdfView else { return }
+                self.prioritizeCenterTap(in: pdfView)
+            }
         }
 
         func prioritizeCenterTap(in pdfView: PDFView) {
@@ -106,8 +116,10 @@ struct PDFDocumentView: UIViewRepresentable {
             isReaderFocused = isFocused
             guard isActive, appliedReaderFocus != isFocused else { return }
             appliedReaderFocus = isFocused
-            let pageIndex = pdfView.currentPage.flatMap { pdfView.document?.index(for: $0) }
-                ?? lastKnownPageIndex
+            // PDFKit may temporarily report the next page as `currentPage`
+            // while its continuous scroll view is settling.  The page-change
+            // notification is the stable reading-position record.
+            let pageIndex = lastKnownPageIndex
 
             DispatchQueue.main.async { [weak pdfView] in
                 guard let pdfView,
@@ -119,7 +131,10 @@ struct PDFDocumentView: UIViewRepresentable {
                 } else {
                     pdfView.autoScales = true
                 }
-                pdfView.go(to: page)
+                pdfView.go(to: PDFDestination(
+                    page: page,
+                    at: page.bounds(for: .mediaBox).origin
+                ))
             }
         }
 
