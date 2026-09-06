@@ -22,6 +22,7 @@ struct ContentView: View {
     @State private var navigationRevision = 0
     @State private var scrubberRevision = 0
     @State private var deviceOrientation = UIDevice.current.orientation
+    @State private var isSearchPresented = false
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -103,6 +104,13 @@ struct ContentView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Open PDF", systemImage: "folder") {
                         isShowingFilePicker = true
+                    }
+                }
+                if isPhone {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Search", systemImage: "magnifyingglass") {
+                            isSearchPresented = true
+                        }
                     }
                 }
                 if isPhone {
@@ -241,7 +249,11 @@ struct ContentView: View {
                 }
             }
         }
-        .searchable(text: $searchText, prompt: "Find in PDF")
+        .searchable(
+            text: $searchText,
+            isPresented: $isSearchPresented,
+            prompt: "Find in PDF"
+        )
         .statusBarHidden(isReaderFocused)
         .persistentSystemOverlays(isReaderFocused ? .hidden : .visible)
         .toolbar(isReaderFocused ? .hidden : .visible, for: .bottomBar)
