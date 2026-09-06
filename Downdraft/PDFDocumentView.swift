@@ -13,7 +13,6 @@ struct PDFDocumentView: UIViewRepresentable {
     var outlineDestination: PDFDestination?
     var requestedPageIndex: Int?
     var onPageChanged: (Int) -> Void = { _ in }
-    var onCenterTap: () -> Void = { }
 
     func makeUIView(context: Context) -> PDFView {
         let view = PagePreservingPDFView()
@@ -21,14 +20,11 @@ struct PDFDocumentView: UIViewRepresentable {
         view.displayDirection = .vertical
         view.displayMode = .singlePageContinuous
         context.coordinator.startObservingPageChanges(in: view)
-        context.coordinator.startObservingCenterTaps(in: view)
         return view
     }
 
     func updateUIView(_ pdfView: PDFView, context: Context) {
         context.coordinator.onPageChanged = onPageChanged
-        context.coordinator.onCenterTap = onCenterTap
-        context.coordinator.prioritizeCenterTap(in: pdfView)
         if context.coordinator.loadedDocument !== document {
             pdfView.document = document
             if let page = pdfView.document?.page(at: initialPageIndex) {
@@ -63,7 +59,6 @@ struct PDFDocumentView: UIViewRepresentable {
     final class Coordinator: NSObject {
         var loadedDocument: PDFDocument?
         var onPageChanged: (Int) -> Void = { _ in }
-        var onCenterTap: () -> Void = { }
         private var isReaderFocused = false
         private var appliedReaderFocus: Bool?
         private var isLandscape = false
@@ -71,7 +66,6 @@ struct PDFDocumentView: UIViewRepresentable {
         private var displayedSearchSelection: PDFSelection?
         private var displayedOutlineDestination: PDFDestination?
         private var displayedRequestedPageIndex: Int?
-        private weak var centerTapGesture: UITapGestureRecognizer?
         var lastKnownPageIndex = 0
         func startObservingPageChanges(in pdfView: PDFView) {
             NotificationCenter.default.addObserver(
@@ -82,60 +76,10 @@ struct PDFDocumentView: UIViewRepresentable {
             )
         }
 
-        func startObservingCenterTaps(in pdfView: PDFView) {
-            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(centerTapped))
-            tapGesture.cancelsTouchesInView = true
-            tapGesture.delaysTouchesEnded = true
-            tapGesture.delegate = self
-            pdfView.addGestureRecognizer(tapGesture)
-            centerTapGesture = tapGesture
-
-            // PDFKit finishes creating some of its private page views on a
-            // later run-loop turn.  Apply the failure relationship again
-            // once those recognisers exist; otherwise its page-turn tap can
-            // still receive the same touch as our reader-chrome tap.
-            DispatchQueue.main.async { [weak self, weak pdfView] in
-                guard let self, let pdfView else { return }
-                self.prioritizeCenterTap(in: pdfView)
-            }
-        }
-
-        func prioritizeCenterTap(in pdfView: PDFView) {
-            guard let centerTapGesture else { return }
-            for recognizer in tapGestures(in: pdfView) where recognizer !== centerTapGesture {
-                recognizer.require(toFail: centerTapGesture)
-            }
-        }
-
-        private func tapGestures(in view: UIView) -> [UITapGestureRecognizer] {
-            let localGestures = (view.gestureRecognizers ?? []).compactMap { $0 as? UITapGestureRecognizer }
-            return localGestures + view.subviews.flatMap(tapGestures(in:))
-        }
-
         func updateReaderFocus(_ isFocused: Bool, isActive: Bool, in pdfView: PDFView) {
             isReaderFocused = isFocused
             guard isActive, appliedReaderFocus != isFocused else { return }
             appliedReaderFocus = isFocused
-            // PDFKit may temporarily report the next page as `currentPage`
-            // while its continuous scroll view is settling.  The page-change
-            // notification is the stable reading-position record.
-            let pageIndex = lastKnownPageIndex
-
-            DispatchQueue.main.async { [weak pdfView] in
-                guard let pdfView,
-                      let page = pdfView.document?.page(at: pageIndex) else { return }
-                pdfView.layoutIfNeeded()
-                if isFocused {
-                    pdfView.autoScales = false
-                    pdfView.scaleFactor = pdfView.scaleFactorForSizeToFit
-                } else {
-                    pdfView.autoScales = true
-                }
-                pdfView.go(to: PDFDestination(
-                    page: page,
-                    at: page.bounds(for: .mediaBox).origin
-                ))
-            }
         }
 
         func updatePageLayout(isLandscape: Bool, displaysAsBook: Bool, in pdfView: PDFView) {
@@ -191,11 +135,6 @@ struct PDFDocumentView: UIViewRepresentable {
             pdfView.go(to: page)
         }
 
-        @objc private func centerTapped() {
-            onCenterTap()
-        }
-
-
         @MainActor @objc private func pageChanged(_ notification: Notification) {
             guard let pdfView = notification.object as? PDFView,
                   let document = pdfView.document,
@@ -245,33 +184,5 @@ private final class PagePreservingPDFView: PDFView {
             }
             disableScrollToTop(in: subview)
         }
-    }
-}
-
-extension PDFDocumentView.Coordinator: UIGestureRecognizerDelegate {
-    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        guard let tapGesture = gestureRecognizer as? UITapGestureRecognizer,
-              let pdfView = tapGesture.view as? PDFView else { return false }
-        let location = tapGesture.location(in: pdfView)
-        let edgeZoneHeight = pdfView.bounds.height * 0.25
-        guard location.y <= edgeZoneHeight
-                || location.y >= pdfView.bounds.height - edgeZoneHeight else {
-            return false
-        }
-
-        // PDFKit's link activation is itself tap-based.  Do not let our
-        // chrome gesture recognize alongside a link, since revealing or
-        // hiding the UI changes the PDF view's size before PDFKit resolves
-        // the link destination.
-        guard let page = pdfView.page(for: location, nearest: false) else { return false }
-        let pointOnPage = pdfView.convert(location, to: page)
-        return page.annotation(at: pointOnPage)?.type?.lowercased() != "link"
-    }
-
-    func gestureRecognizer(
-        _ gestureRecognizer: UIGestureRecognizer,
-        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
-    ) -> Bool {
-        false
     }
 }

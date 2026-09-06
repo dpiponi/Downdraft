@@ -76,8 +76,6 @@ struct ContentView: View {
                                                 : nil
                                     ) { pageIndex in
                                             updatePage(pageIndex, for: document.id)
-                                        } onCenterTap: {
-                                            isReaderFocused.toggle()
                                         }
                                         .opacity(document.id == selectedDocumentID ? 1 : 0)
                                         .allowsHitTesting(document.id == selectedDocumentID)
@@ -87,6 +85,16 @@ struct ContentView: View {
 
                                 if selectedDocument?.url == nil {
                                     ProgressView()
+                                }
+
+                                // This sits above PDFKit only in the two
+                                // reader-control zones.  A tap is therefore
+                                // never also delivered to PDFKit, whose own
+                                // private tap handling can advance a page.
+                                if selectedDocument?.pdfDocument != nil {
+                                    ReaderChromeTapZones {
+                                        isReaderFocused.toggle()
+                                    }
                                 }
                             }
 
@@ -363,6 +371,44 @@ struct ContentView: View {
 
     private func saveDocuments() {
         OpenDocument.save(documents)
+    }
+}
+
+private struct ReaderChromeTapZones: UIViewRepresentable {
+    let toggle: () -> Void
+
+    func makeUIView(context: Context) -> ReaderChromeTapZoneView {
+        ReaderChromeTapZoneView()
+    }
+
+    func updateUIView(_ view: ReaderChromeTapZoneView, context: Context) {
+        view.toggle = toggle
+    }
+}
+
+private final class ReaderChromeTapZoneView: UIControl {
+    var toggle: () -> Void = { }
+    private var startLocation = CGPoint.zero
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        let zoneHeight = bounds.height * 0.25
+        return point.y <= zoneHeight || point.y >= bounds.height - zoneHeight
+    }
+
+    override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
+        startLocation = touch.location(in: self)
+        return true
+    }
+
+    override func continueTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
+        let location = touch.location(in: self)
+        return hypot(location.x - startLocation.x, location.y - startLocation.y) < 12
+    }
+
+    override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
+        guard let touch,
+              point(inside: touch.location(in: self), with: event) else { return }
+        toggle()
     }
 }
 
