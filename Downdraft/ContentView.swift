@@ -424,12 +424,14 @@ struct ContentView: View {
     private func navigateBack(in document: OpenDocument) {
         guard let pageIndex = document.navigateBack(from: document.lastPageIndex) else { return }
         navigationRevision += 1
+        scrubbedPageIndex = pageIndex
         requestedPageIndex = pageIndex
     }
 
     private func navigateForward(in document: OpenDocument) {
         guard let pageIndex = document.navigateForward(from: document.lastPageIndex) else { return }
         navigationRevision += 1
+        scrubbedPageIndex = pageIndex
         requestedPageIndex = pageIndex
     }
 
