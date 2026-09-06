@@ -19,8 +19,6 @@ struct ContentView: View {
     @State private var scrubbedPageIndex = 0
     @State private var requestedPageIndex: Int?
     @State private var bookmarkPageIndices: [Int?] = [nil, nil, nil]
-    @State private var flashingBookmarkIndex: Int?
-    @State private var bookmarkFlashID: UUID?
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -158,7 +156,6 @@ struct ContentView: View {
                             BookmarkSlotButton(
                                 number: index + 1,
                                 isSet: bookmarkPageIndices[index] != nil,
-                                isFlashing: flashingBookmarkIndex == index,
                                 goToBookmark: { goToBookmark(at: index) },
                                 storeBookmark: { storeBookmark(at: index) }
                             )
@@ -337,13 +334,6 @@ struct ContentView: View {
         bookmarkPageIndices[index] = document.lastPageIndex
         BookmarkStore.save(document.bookmarkPageIndices, for: document)
         saveDocuments()
-        let flashID = UUID()
-        bookmarkFlashID = flashID
-        flashingBookmarkIndex = index
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-            guard bookmarkFlashID == flashID else { return }
-            flashingBookmarkIndex = nil
-        }
     }
 
     private func openBookmark(_ bookmarkData: Data) {
@@ -406,7 +396,6 @@ private struct PageScrubber: View {
 private struct BookmarkSlotButton: UIViewRepresentable {
     let number: Int
     let isSet: Bool
-    let isFlashing: Bool
     let goToBookmark: () -> Void
     let storeBookmark: () -> Void
 
@@ -418,7 +407,6 @@ private struct BookmarkSlotButton: UIViewRepresentable {
         control.configure(
             number: number,
             isSet: isSet,
-            isFlashing: isFlashing,
             goToBookmark: goToBookmark,
             storeBookmark: storeBookmark
         )
@@ -430,8 +418,7 @@ private final class BookmarkSlotControl: UIControl {
     private var goToBookmark: () -> Void = { }
     private var storeBookmark: () -> Void = { }
     private var didStoreDuringTouch = false
-    private var wasFlashing = false
-    private let pulseLayer = CAShapeLayer()
+    private var mutedColor = UIColor.clear
 
     override var intrinsicContentSize: CGSize {
         CGSize(width: 36, height: 36)
@@ -443,16 +430,14 @@ private final class BookmarkSlotControl: UIControl {
         label.adjustsFontForContentSizeCategory = true
         label.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         addSubview(label)
+        addTarget(self, action: #selector(pressBegan), for: .touchDown)
         addTarget(self, action: #selector(tapped), for: .touchUpInside)
+        addTarget(self, action: #selector(pressCancelled), for: [.touchUpOutside, .touchCancel])
 
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(longPressed))
         longPress.minimumPressDuration = 0.5
         longPress.cancelsTouchesInView = false
         addGestureRecognizer(longPress)
-
-        pulseLayer.fillColor = UIColor.clear.cgColor
-        pulseLayer.lineWidth = 1.5
-        layer.insertSublayer(pulseLayer, at: 0)
 
         isAccessibilityElement = true
         accessibilityTraits = .button
@@ -466,14 +451,11 @@ private final class BookmarkSlotControl: UIControl {
         super.layoutSubviews()
         label.frame = bounds
         layer.cornerRadius = bounds.height / 2
-        pulseLayer.frame = bounds
-        pulseLayer.path = UIBezierPath(ovalIn: bounds.insetBy(dx: 1, dy: 1)).cgPath
     }
 
     func configure(
         number: Int,
         isSet: Bool,
-        isFlashing: Bool,
         goToBookmark: @escaping () -> Void,
         storeBookmark: @escaping () -> Void
     ) {
@@ -481,49 +463,45 @@ private final class BookmarkSlotControl: UIControl {
         self.storeBookmark = storeBookmark
         label.text = "\(number)"
         label.font = .monospacedDigitSystemFont(ofSize: 17, weight: isSet ? .semibold : .regular)
-        let mutedColor = isSet ? tintColor.withAlphaComponent(0.18) : .clear
-        let brightColor = isSet ? tintColor.withAlphaComponent(0.48) : .clear
-        if !wasFlashing && isFlashing {
-            UIView.animate(withDuration: 0.12, delay: 0, options: [.beginFromCurrentState]) {
-                self.backgroundColor = brightColor
-            }
-        } else if wasFlashing && !isFlashing {
-            playPing()
-            UIView.animate(withDuration: 0.35, delay: 0, options: [.beginFromCurrentState]) {
-                self.backgroundColor = mutedColor
-            }
-        } else {
-            backgroundColor = isFlashing ? brightColor : mutedColor
+        mutedColor = isSet ? tintColor.withAlphaComponent(0.18) : .clear
+        if !isHighlighted {
+            backgroundColor = mutedColor
         }
-        wasFlashing = isFlashing
         accessibilityLabel = "Bookmark \(number)"
         accessibilityHint = isSet
             ? "Double tap to go to its saved page. Press and hold to replace it with the current page."
             : "Press and hold to save the current page."
     }
 
-    private func playPing() {
-        pulseLayer.removeAllAnimations()
-        pulseLayer.strokeColor = tintColor.cgColor
+    @objc private func pressBegan() {
+        layer.removeAllAnimations()
+        UIView.animate(withDuration: 0.5, delay: 0, options: [.curveLinear, .beginFromCurrentState]) {
+            self.backgroundColor = self.tintColor.withAlphaComponent(0.42)
+            self.transform = CGAffineTransform(scaleX: 0.88, y: 0.88)
+        }
+    }
 
-        let scale = CABasicAnimation(keyPath: "transform.scale")
-        scale.fromValue = 1
-        scale.toValue = 1.3
+    @objc private func pressCancelled() {
+        releaseTension()
+    }
 
-        let opacity = CABasicAnimation(keyPath: "opacity")
-        opacity.fromValue = 1
-        opacity.toValue = 0
-
-        let ping = CAAnimationGroup()
-        ping.animations = [scale, opacity]
-        ping.duration = 0.35
-        ping.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        pulseLayer.add(ping, forKey: "bookmarkPing")
+    private func releaseTension() {
+        UIView.animate(
+            withDuration: 0.26,
+            delay: 0,
+            usingSpringWithDamping: 0.58,
+            initialSpringVelocity: 0.8,
+            options: [.beginFromCurrentState]
+        ) {
+            self.backgroundColor = self.mutedColor
+            self.transform = .identity
+        }
     }
 
     @objc private func tapped() {
         defer { didStoreDuringTouch = false }
         guard !didStoreDuringTouch else { return }
+        releaseTension()
         goToBookmark()
     }
 
@@ -531,6 +509,7 @@ private final class BookmarkSlotControl: UIControl {
         guard recognizer.state == .began else { return }
         didStoreDuringTouch = true
         storeBookmark()
+        releaseTension()
     }
 }
 
