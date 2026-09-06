@@ -243,10 +243,10 @@ struct ContentView: View {
                 }
             }
         }
-        .searchable(
+        .readerSearchable(
+            !isReaderFocused,
             text: $searchText,
-            isPresented: $isSearchPresented,
-            prompt: "Find in PDF"
+            isPresented: $isSearchPresented
         )
         .statusBarHidden(isReaderFocused)
         .persistentSystemOverlays(isReaderFocused ? .hidden : .visible)
@@ -384,6 +384,9 @@ struct ContentView: View {
 
     private func toggleReaderFocus() {
         withAnimation(.easeInOut(duration: 0.24)) {
+            if !isReaderFocused {
+                isSearchPresented = false
+            }
             isReaderFocused.toggle()
         }
     }
@@ -570,6 +573,21 @@ struct ContentView: View {
 
     private func saveDocuments() {
         OpenDocument.save(documents)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func readerSearchable(
+        _ isEnabled: Bool,
+        text: Binding<String>,
+        isPresented: Binding<Bool>
+    ) -> some View {
+        if isEnabled {
+            searchable(text: text, isPresented: isPresented, prompt: "Find in PDF")
+        } else {
+            self
+        }
     }
 }
 
