@@ -14,12 +14,14 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A00000000000000000000002 /* Downdraft */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (A00000000000000000000010 /* App build exceptions */,);
 			path = Downdraft;
 			sourceTree = "<group>";
 		};
 		B00000000000000000000002 /* DowndraftWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (B0000000000000000000000E /* Widget build exceptions */,); path = DowndraftWidget; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A00000000000000000000010 /* App build exceptions */ = {isa = PBXFileSystemSynchronizedBuildFileExceptionSet; membershipExceptions = (Info.plist,); target = A00000000000000000000005 /* Downdraft */; };
 		B0000000000000000000000E /* Widget build exceptions */ = {isa = PBXFileSystemSynchronizedBuildFileExceptionSet; membershipExceptions = (Info.plist,); target = B00000000000000000000006 /* DowndraftWidget */; };
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -193,9 +195,7 @@
 				CODE_SIGN_ENTITLEMENTS = Downdraft/Downdraft.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8X94X6Z25L;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_FILE = Downdraft/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dan.Downdraft;
@@ -217,9 +217,7 @@
 				CODE_SIGN_ENTITLEMENTS = Downdraft/Downdraft.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8X94X6Z25L;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_FILE = Downdraft/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dan.Downdraft;

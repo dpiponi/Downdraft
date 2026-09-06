@@ -184,6 +184,10 @@ struct ContentView: View {
             }
         }
         .onOpenURL { url in
+            if url.isFileURL {
+                open(url)
+                return
+            }
             guard url.scheme == "downdraft",
                   url.host == "open",
                   let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
@@ -216,12 +220,12 @@ struct ContentView: View {
             return
         }
 
-        guard url.startAccessingSecurityScopedResource() else {
-            errorMessage = "Files didn’t grant access to this PDF."
-            return
-        }
+        let isAccessingSecurityScope = url.startAccessingSecurityScopedResource()
 
-        guard let document = OpenDocument(url: url) else {
+        guard let document = OpenDocument(
+            url: url,
+            isAccessingSecurityScope: isAccessingSecurityScope
+        ) else {
             errorMessage = "Downdraft couldn’t save permission to reopen this PDF."
             return
         }
@@ -427,13 +431,15 @@ private final class OpenDocument: Identifiable {
         self.isAccessingFile = isAccessingFile
     }
 
-    convenience init?(url: URL) {
+    convenience init?(url: URL, isAccessingSecurityScope: Bool) {
         guard let bookmarkData = try? url.bookmarkData(
             options: [],
             includingResourceValuesForKeys: nil,
             relativeTo: nil
         ) else {
-            url.stopAccessingSecurityScopedResource()
+            if isAccessingSecurityScope {
+                url.stopAccessingSecurityScopedResource()
+            }
             return nil
         }
         self.init(
@@ -441,7 +447,7 @@ private final class OpenDocument: Identifiable {
             bookmarkData: bookmarkData,
             displayName: url.deletingPathExtension().lastPathComponent,
             originalURLString: url.standardizedFileURL.absoluteString,
-            isAccessingFile: true
+            isAccessingFile: isAccessingSecurityScope
         )
     }
 
@@ -470,11 +476,12 @@ private final class OpenDocument: Identifiable {
             options: [],
             relativeTo: nil,
             bookmarkDataIsStale: &isStale
-        ), resolvedURL.startAccessingSecurityScopedResource() else {
+        ) else {
             return false
         }
+        let isAccessingSecurityScope = resolvedURL.startAccessingSecurityScopedResource()
         url = resolvedURL
-        isAccessingFile = true
+        isAccessingFile = isAccessingSecurityScope
         pdfDocument = PDFDocument(url: resolvedURL)
         return pdfDocument != nil
     }
