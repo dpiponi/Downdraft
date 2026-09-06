@@ -248,6 +248,8 @@ struct ContentView: View {
             errorMessage = "Downdraft couldn’t save permission to reopen this PDF."
             return
         }
+        document.bookmarkPageIndices = BookmarkStore.bookmarks(for: document)
+            ?? document.bookmarkPageIndices
         documents.append(document)
         selectDocument(document.id)
         saveDocuments()
@@ -275,6 +277,12 @@ struct ContentView: View {
         treatsFirstPageAsCover = document.displaysAsBook
         scrubbedPageIndex = document.lastPageIndex
         requestedPageIndex = nil
+        let storedBookmarks = BookmarkStore.bookmarks(for: document)
+        if let storedBookmarks {
+            document.bookmarkPageIndices = storedBookmarks
+        } else {
+            BookmarkStore.save(document.bookmarkPageIndices, for: document)
+        }
         bookmarkPageIndices = document.bookmarkPageIndices
         RecentDocumentStore.record(
             id: document.id,
@@ -323,6 +331,7 @@ struct ContentView: View {
         guard let document = selectedDocument else { return }
         document.bookmarkPageIndices[index] = document.lastPageIndex
         bookmarkPageIndices[index] = document.lastPageIndex
+        BookmarkStore.save(document.bookmarkPageIndices, for: document)
         saveDocuments()
         let flashID = UUID()
         bookmarkFlashID = flashID
@@ -711,6 +720,47 @@ private final class OpenDocument: Identifiable {
                 isAccessingFile: false
             )
         }
+    }
+}
+
+private enum BookmarkStore {
+    private static let savedBookmarksKey = "quickBookmarksByDocument"
+
+    static func bookmarks(for document: OpenDocument) -> [Int?]? {
+        guard let key = key(for: document),
+              let data = UserDefaults.standard.data(forKey: savedBookmarksKey),
+              let storedBookmarks = try? JSONDecoder().decode([String: [Int?]].self, from: data),
+              let bookmarks = storedBookmarks[key] else {
+            return nil
+        }
+        return normalized(bookmarks)
+    }
+
+    static func save(_ bookmarks: [Int?], for document: OpenDocument) {
+        guard let key = key(for: document) else { return }
+        var storedBookmarks: [String: [Int?]] = [:]
+        if let data = UserDefaults.standard.data(forKey: savedBookmarksKey),
+           let decoded = try? JSONDecoder().decode([String: [Int?]].self, from: data) {
+            storedBookmarks = decoded
+        }
+        storedBookmarks[key] = normalized(bookmarks)
+        guard let data = try? JSONEncoder().encode(storedBookmarks) else { return }
+        UserDefaults.standard.set(data, forKey: savedBookmarksKey)
+    }
+
+    private static func key(for document: OpenDocument) -> String? {
+        if !document.originalURLString.isEmpty {
+            return document.originalURLString
+        }
+        return document.url?.standardizedFileURL.absoluteString
+    }
+
+    private static func normalized(_ bookmarks: [Int?]) -> [Int?] {
+        var normalized = Array(bookmarks.prefix(3))
+        while normalized.count < 3 {
+            normalized.append(nil)
+        }
+        return normalized
     }
 }
 
