@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var treatsFirstPageAsCover = true
     @State private var scrubbedPageIndex = 0
     @State private var requestedPageIndex: Int?
+    @State private var bookmarkPageIndices: [Int?] = [nil, nil, nil]
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -149,7 +150,7 @@ struct ContentView: View {
                         ForEach(0..<3, id: \.self) { index in
                             BookmarkSlotButton(
                                 number: index + 1,
-                                isSet: selectedDocument?.bookmarkPageIndices[index] != nil,
+                                isSet: bookmarkPageIndices[index] != nil,
                                 goToBookmark: { goToBookmark(at: index) },
                                 storeBookmark: { storeBookmark(at: index) }
                             )
@@ -268,6 +269,7 @@ struct ContentView: View {
         treatsFirstPageAsCover = document.displaysAsBook
         scrubbedPageIndex = document.lastPageIndex
         requestedPageIndex = nil
+        bookmarkPageIndices = document.bookmarkPageIndices
         RecentDocumentStore.record(
             id: document.id,
             name: document.displayName,
@@ -314,6 +316,7 @@ struct ContentView: View {
     private func storeBookmark(at index: Int) {
         guard let document = selectedDocument else { return }
         document.bookmarkPageIndices[index] = document.lastPageIndex
+        bookmarkPageIndices[index] = document.lastPageIndex
         saveDocuments()
     }
 
@@ -386,6 +389,12 @@ private struct BookmarkSlotButton: View {
             .fontWeight(isSet ? .semibold : .regular)
             .frame(minWidth: 28, minHeight: 36)
             .contentShape(Rectangle())
+            .background {
+                if isSet {
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.18))
+                }
+            }
             .gesture(
                 LongPressGesture(minimumDuration: 0.5)
                     .onEnded { _ in storeBookmark() }
