@@ -143,6 +143,12 @@ struct PDFDocumentView: UIViewRepresentable {
             pdfView.currentSelection = selection
             if let selection {
                 pdfView.go(to: selection)
+                // `go(to:)` scrolls PDFKit's internal view after this call
+                // returns. Reproject the overlay on the next run-loop turn,
+                // once its page coordinate system has caught up.
+                DispatchQueue.main.async { [weak pdfView] in
+                    (pdfView as? PagePreservingPDFView)?.refreshCurrentSearchHighlight()
+                }
             }
         }
 
@@ -171,6 +177,7 @@ struct PDFDocumentView: UIViewRepresentable {
                   let page = pdfView.currentPage else { return }
             let pageIndex = document.index(for: page)
             lastKnownPageIndex = pageIndex
+            (pdfView as? PagePreservingPDFView)?.refreshCurrentSearchHighlight()
             onPageChanged(pageIndex)
         }
 
@@ -236,6 +243,10 @@ private final class PagePreservingPDFView: PDFView {
     override func layoutSubviews() {
         super.layoutSubviews()
         disableScrollToTop(in: self)
+        updateCurrentSearchHighlight()
+    }
+
+    func refreshCurrentSearchHighlight() {
         updateCurrentSearchHighlight()
     }
 
