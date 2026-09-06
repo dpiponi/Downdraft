@@ -21,6 +21,7 @@ struct ContentView: View {
     @State private var bookmarkPageIndices: [Int?] = [nil, nil, nil]
     @State private var navigationRevision = 0
     @State private var scrubberRevision = 0
+    @State private var deviceOrientation = UIDevice.current.orientation
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -41,7 +42,7 @@ struct ContentView: View {
                         description: Text("Choose a PDF from Files to begin reading.")
                     )
                 } else {
-                    GeometryReader { proxy in
+                    GeometryReader { _ in
                         VStack(spacing: 0) {
                             if !isReaderFocused {
                                 DocumentTabStrip(
@@ -56,7 +57,7 @@ struct ContentView: View {
                             // retains its zoom level and reading position.
                             ZStack {
                                 ForEach(documents) { document in
-                                    reader(for: document, size: proxy.size)
+                                    reader(for: document)
                                 }
 
                                 if selectedDocument?.url == nil {
@@ -203,9 +204,16 @@ struct ContentView: View {
             Text(errorMessage ?? "Unknown error")
         }
         .onAppear {
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            deviceOrientation = UIDevice.current.orientation
             if selectedDocumentID == nil, let firstDocument = documents.first {
                 selectDocument(firstDocument.id)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: UIDevice.orientationDidChangeNotification
+        )) { _ in
+            deviceOrientation = UIDevice.current.orientation
         }
         .onOpenURL { url in
             if url.isFileURL {
@@ -225,7 +233,7 @@ struct ContentView: View {
     }
 
     @ViewBuilder
-    private func reader(for document: OpenDocument, size: CGSize) -> some View {
+    private func reader(for document: OpenDocument) -> some View {
         if let pdfDocument = document.pdfDocument {
             let isSelected = document.id == selectedDocumentID
             PDFDocumentView(
@@ -233,7 +241,7 @@ struct ContentView: View {
                 initialPageIndex: document.lastPageIndex,
                 isActive: isSelected,
                 isReaderFocused: isReaderFocused,
-                isLandscape: size.width > size.height,
+                isLandscape: isLandscapeInterface,
                 displaysAsBook: treatsFirstPageAsCover,
                 searchSelection: isSelected ? currentSearchSelection : nil,
                 searchSelections: isSelected ? searchResults : [],
@@ -257,6 +265,20 @@ struct ContentView: View {
             .allowsHitTesting(isSelected)
             .accessibilityHidden(!isSelected)
         }
+    }
+
+    private var isLandscapeInterface: Bool {
+        if deviceOrientation.isLandscape {
+            return true
+        }
+        if deviceOrientation.isPortrait {
+            return false
+        }
+        return UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?
+            .interfaceOrientation
+            .isLandscape ?? false
     }
 
     private func handleFileImport(_ result: Result<[URL], Error>) {
