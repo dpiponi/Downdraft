@@ -23,6 +23,7 @@ struct ContentView: View {
     @State private var scrubberRevision = 0
     @State private var deviceOrientation = UIDevice.current.orientation
     @State private var isSearchPresented = false
+    @State private var isShowingBookmarks = false
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -131,18 +132,12 @@ struct ContentView: View {
                                     isShowingContents = true
                                 }
                             }
-                            if selectedDocument != nil {
-                                Menu("Bookmarks", systemImage: "bookmark") {
-                                    ForEach(0..<3, id: \.self) { index in
-                                        Button("Go to Bookmark \(index + 1)") {
-                                            goToBookmark(at: index)
-                                        }
-                                        .disabled(bookmarkPageIndices[index] == nil)
-                                        Button("Save Current Page as Bookmark \(index + 1)") {
-                                            storeBookmark(at: index)
-                                        }
-                                    }
-                                }
+                        }
+                    }
+                    if selectedDocument != nil {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Bookmarks", systemImage: "bookmark") {
+                                isShowingBookmarks = true
                             }
                         }
                     }
@@ -272,6 +267,29 @@ struct ContentView: View {
                     isShowingContents = false
                 }
             }
+        }
+        .sheet(isPresented: $isShowingBookmarks) {
+            VStack(spacing: 14) {
+                Text("Bookmarks")
+                    .font(.headline)
+                HStack(spacing: 24) {
+                    ForEach(0..<3, id: \.self) { index in
+                        BookmarkSlotButton(
+                            number: index + 1,
+                            isSet: bookmarkPageIndices[index] != nil,
+                            size: 48,
+                            goToBookmark: {
+                                goToBookmark(at: index)
+                                isShowingBookmarks = false
+                            },
+                            storeBookmark: { storeBookmark(at: index) }
+                        )
+                    }
+                }
+            }
+            .padding()
+            .presentationDetents([.height(140)])
+            .presentationDragIndicator(.visible)
         }
         .fileImporter(
             isPresented: $isShowingFilePicker,
@@ -650,11 +668,12 @@ private struct PageScrubber: View {
 private struct BookmarkSlotButton: UIViewRepresentable {
     let number: Int
     let isSet: Bool
+    var size: CGFloat = 36
     let goToBookmark: () -> Void
     let storeBookmark: () -> Void
 
     func makeUIView(context: Context) -> BookmarkSlotControl {
-        BookmarkSlotControl()
+        BookmarkSlotControl(size: size)
     }
 
     func updateUIView(_ control: BookmarkSlotControl, context: Context) {
@@ -673,13 +692,15 @@ private final class BookmarkSlotControl: UIControl {
     private var storeBookmark: () -> Void = { }
     private var didStoreDuringTouch = false
     private var mutedColor = UIColor.clear
+    private let size: CGFloat
 
     override var intrinsicContentSize: CGSize {
-        CGSize(width: 36, height: 36)
+        CGSize(width: size, height: size)
     }
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
+    init(size: CGFloat) {
+        self.size = size
+        super.init(frame: .zero)
         label.textAlignment = .center
         label.adjustsFontForContentSizeCategory = true
         label.autoresizingMask = [.flexibleWidth, .flexibleHeight]
