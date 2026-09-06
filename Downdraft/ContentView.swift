@@ -102,16 +102,19 @@ struct ContentView: View {
                     }
                 }
                 if let document = selectedDocument {
+                    // Reading this state refreshes the toolbar after the
+                    // document's transient history object changes.
+                    let historyControlsAreCurrent = navigationRevision >= 0
                     ToolbarItemGroup(placement: .topBarLeading) {
                         Button("Back", systemImage: "chevron.backward") {
                             navigateBack(in: document)
                         }
-                        .disabled(!document.canNavigateBack)
+                        .disabled(!document.canNavigateBack || !historyControlsAreCurrent)
 
                         Button("Forward", systemImage: "chevron.forward") {
                             navigateForward(in: document)
                         }
-                        .disabled(!document.canNavigateForward)
+                        .disabled(!document.canNavigateForward || !historyControlsAreCurrent)
                     }
                 }
                 if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
