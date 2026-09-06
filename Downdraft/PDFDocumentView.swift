@@ -151,30 +151,9 @@ struct PDFDocumentView: UIViewRepresentable {
 }
 
 private final class PagePreservingPDFView: PDFView {
-    private var previousBoundsSize = CGSize.zero
-
     override func layoutSubviews() {
-        let pageBeforeLayout = currentPage
-        let sizeChanged = previousBoundsSize != .zero && bounds.size != previousBoundsSize
         super.layoutSubviews()
         disableScrollToTop(in: self)
-        previousBoundsSize = bounds.size
-
-        // PDFKit can reset its scroll position while auto-scaling after an
-        // unrelated SwiftUI layout change (for example, search focus). Keep
-        // the page that was visible before the size change.
-        guard sizeChanged, let pageBeforeLayout else { return }
-        DispatchQueue.main.async { [weak self, weak pageBeforeLayout] in
-            guard let self, let pageBeforeLayout else { return }
-            // `currentPage` can remain correct while PDFKit's internal
-            // scroll view jumps to its origin.  A page-only `go(to:)` is
-            // then optimised away, so restore an explicit destination.
-            let destination = PDFDestination(
-                page: pageBeforeLayout,
-                at: pageBeforeLayout.bounds(for: .mediaBox).origin
-            )
-            self.go(to: destination)
-        }
     }
 
     private func disableScrollToTop(in view: UIView) {
