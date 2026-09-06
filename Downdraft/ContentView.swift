@@ -144,6 +144,18 @@ struct ContentView: View {
                         )
                     }
                 }
+                if selectedDocument != nil {
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        ForEach(0..<3, id: \.self) { index in
+                            BookmarkSlotButton(
+                                number: index + 1,
+                                isSet: selectedDocument?.bookmarkPageIndices[index] != nil,
+                                goToBookmark: { goToBookmark(at: index) },
+                                storeBookmark: { storeBookmark(at: index) }
+                            )
+                        }
+                    }
+                }
             }
         }
         .searchable(text: $searchText, prompt: "Find in PDF")
@@ -293,6 +305,18 @@ struct ContentView: View {
         saveDocuments()
     }
 
+    private func goToBookmark(at index: Int) {
+        guard let document = selectedDocument,
+              let pageIndex = document.bookmarkPageIndices[index] else { return }
+        requestedPageIndex = pageIndex
+    }
+
+    private func storeBookmark(at index: Int) {
+        guard let document = selectedDocument else { return }
+        document.bookmarkPageIndices[index] = document.lastPageIndex
+        saveDocuments()
+    }
+
     private func openBookmark(_ bookmarkData: Data) {
         var isStale = false
         guard let url = try? URL(
@@ -347,6 +371,26 @@ private struct PageScrubber: View {
         .padding(.horizontal)
         .padding(.vertical, 10)
         .background(.bar)
+    }
+}
+
+private struct BookmarkSlotButton: View {
+    let number: Int
+    let isSet: Bool
+    let goToBookmark: () -> Void
+    let storeBookmark: () -> Void
+
+    var body: some View {
+        Button(action: goToBookmark) {
+            Text("\(number)")
+                .font(.body.monospacedDigit())
+                .fontWeight(isSet ? .semibold : .regular)
+        }
+        .onLongPressGesture(minimumDuration: 0.5, perform: storeBookmark)
+        .accessibilityLabel("Bookmark \(number)")
+        .accessibilityHint(isSet
+            ? "Double tap to go to its saved page. Press and hold to replace it with the current page."
+            : "Press and hold to save the current page.")
     }
 }
 
@@ -411,6 +455,7 @@ private final class OpenDocument: Identifiable {
     let originalURLString: String
     var lastPageIndex: Int
     var displaysAsBook: Bool
+    var bookmarkPageIndices: [Int?]
     private var isAccessingFile: Bool
 
     init(
@@ -420,6 +465,7 @@ private final class OpenDocument: Identifiable {
         originalURLString: String,
         lastPageIndex: Int = 0,
         displaysAsBook: Bool = true,
+        bookmarkPageIndices: [Int?] = [nil, nil, nil],
         isAccessingFile: Bool
     ) {
         self.url = url
@@ -428,6 +474,10 @@ private final class OpenDocument: Identifiable {
         self.originalURLString = originalURLString
         self.lastPageIndex = lastPageIndex
         self.displaysAsBook = displaysAsBook
+        self.bookmarkPageIndices = Array(bookmarkPageIndices.prefix(3))
+        while self.bookmarkPageIndices.count < 3 {
+            self.bookmarkPageIndices.append(nil)
+        }
         self.isAccessingFile = isAccessingFile
     }
 
@@ -496,6 +546,7 @@ private final class OpenDocument: Identifiable {
         let originalURLString: String?
         let lastPageIndex: Int
         let displaysAsBook: Bool?
+        let bookmarkPageIndices: [Int?]?
     }
 
     private static let savedDocumentsKey = "openDocuments"
@@ -507,7 +558,8 @@ private final class OpenDocument: Identifiable {
                 displayName: $0.displayName,
                 originalURLString: $0.originalURLString,
                 lastPageIndex: $0.lastPageIndex,
-                displaysAsBook: $0.displaysAsBook
+                displaysAsBook: $0.displaysAsBook,
+                bookmarkPageIndices: $0.bookmarkPageIndices
             )
         }
         guard let data = try? JSONEncoder().encode(savedDocuments) else { return }
@@ -528,6 +580,7 @@ private final class OpenDocument: Identifiable {
                 originalURLString: savedDocument.originalURLString ?? "",
                 lastPageIndex: savedDocument.lastPageIndex,
                 displaysAsBook: savedDocument.displaysAsBook ?? true,
+                bookmarkPageIndices: savedDocument.bookmarkPageIndices ?? [nil, nil, nil],
                 isAccessingFile: false
             )
         }
