@@ -19,6 +19,8 @@ struct ContentView: View {
     @State private var scrubbedPageIndex = 0
     @State private var requestedPageIndex: Int?
     @State private var bookmarkPageIndices: [Int?] = [nil, nil, nil]
+    @State private var flashingBookmarkIndex: Int?
+    @State private var bookmarkFlashID: UUID?
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -152,6 +154,7 @@ struct ContentView: View {
                             BookmarkSlotButton(
                                 number: index + 1,
                                 isSet: bookmarkPageIndices[index] != nil,
+                                isFlashing: flashingBookmarkIndex == index,
                                 goToBookmark: { goToBookmark(at: index) },
                                 storeBookmark: { storeBookmark(at: index) }
                             )
@@ -319,6 +322,13 @@ struct ContentView: View {
         document.bookmarkPageIndices[index] = document.lastPageIndex
         bookmarkPageIndices[index] = document.lastPageIndex
         saveDocuments()
+        let flashID = UUID()
+        bookmarkFlashID = flashID
+        flashingBookmarkIndex = index
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            guard bookmarkFlashID == flashID else { return }
+            flashingBookmarkIndex = nil
+        }
     }
 
     private func openBookmark(_ bookmarkData: Data) {
@@ -381,6 +391,7 @@ private struct PageScrubber: View {
 private struct BookmarkSlotButton: UIViewRepresentable {
     let number: Int
     let isSet: Bool
+    let isFlashing: Bool
     let goToBookmark: () -> Void
     let storeBookmark: () -> Void
 
@@ -392,6 +403,7 @@ private struct BookmarkSlotButton: UIViewRepresentable {
         control.configure(
             number: number,
             isSet: isSet,
+            isFlashing: isFlashing,
             goToBookmark: goToBookmark,
             storeBookmark: storeBookmark
         )
@@ -438,6 +450,7 @@ private final class BookmarkSlotControl: UIControl {
     func configure(
         number: Int,
         isSet: Bool,
+        isFlashing: Bool,
         goToBookmark: @escaping () -> Void,
         storeBookmark: @escaping () -> Void
     ) {
@@ -445,7 +458,9 @@ private final class BookmarkSlotControl: UIControl {
         self.storeBookmark = storeBookmark
         label.text = "\(number)"
         label.font = .monospacedDigitSystemFont(ofSize: 17, weight: isSet ? .semibold : .regular)
-        backgroundColor = isSet ? tintColor.withAlphaComponent(0.18) : .clear
+        backgroundColor = isSet
+            ? tintColor.withAlphaComponent(isFlashing ? 0.48 : 0.18)
+            : .clear
         accessibilityLabel = "Bookmark \(number)"
         accessibilityHint = isSet
             ? "Double tap to go to its saved page. Press and hold to replace it with the current page."
