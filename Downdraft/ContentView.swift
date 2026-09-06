@@ -51,6 +51,7 @@ struct ContentView: View {
                                     select: selectDocument,
                                     close: close
                                 )
+                                .transition(.move(edge: .top).combined(with: .opacity))
                             }
 
                             // Keep every PDFView in the hierarchy, so switching tabs
@@ -82,8 +83,10 @@ struct ContentView: View {
                                     }
                                 )
                                 .id(scrubberRevision)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
                             }
                         }
+                        .animation(.easeInOut(duration: 0.24), value: isReaderFocused)
                     }
                 }
             }
@@ -253,7 +256,7 @@ struct ContentView: View {
                     updatePage(pageIndex, for: document.id)
                 },
                 onCenterTap: {
-                    isReaderFocused.toggle()
+                    toggleReaderFocus()
                 },
                 onLinkNavigation: { sourcePageIndex, destinationPageIndex in
                     recordNavigation(
@@ -281,6 +284,12 @@ struct ContentView: View {
             .first?
             .interfaceOrientation
             .isLandscape ?? false
+    }
+
+    private func toggleReaderFocus() {
+        withAnimation(.easeInOut(duration: 0.24)) {
+            isReaderFocused.toggle()
+        }
     }
 
     private func handleFileImport(_ result: Result<[URL], Error>) {
