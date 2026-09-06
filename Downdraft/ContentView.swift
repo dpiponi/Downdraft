@@ -98,36 +98,6 @@ struct ContentView: View {
                         isShowingFilePicker = true
                     }
                 }
-                if !searchResults.isEmpty {
-                    ToolbarItemGroup(placement: .topBarLeading) {
-                        Button("Previous match", systemImage: "chevron.up") {
-                            moveSearchResult(by: -1)
-                        }
-                        Button("Next match", systemImage: "chevron.down") {
-                            moveSearchResult(by: 1)
-                        }
-                        Text("\(currentSearchResultIndex + 1) of \(searchResults.count)")
-                            .font(.caption)
-                            .monospacedDigit()
-                            .fixedSize(horizontal: true, vertical: false)
-                    }
-                }
-                if let document = selectedDocument {
-                    // Reading this state refreshes the toolbar after the
-                    // document's transient history object changes.
-                    let historyControlsAreCurrent = navigationRevision >= 0
-                    ToolbarItemGroup(placement: .topBarLeading) {
-                        Button("Back", systemImage: "chevron.backward") {
-                            navigateBack(in: document)
-                        }
-                        .disabled(!document.canNavigateBack || !historyControlsAreCurrent)
-
-                        Button("Forward", systemImage: "chevron.forward") {
-                            navigateForward(in: document)
-                        }
-                        .disabled(!document.canNavigateForward || !historyControlsAreCurrent)
-                    }
-                }
                 if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Contents", systemImage: "list.bullet") {
@@ -160,6 +130,38 @@ struct ContentView: View {
                                 goToBookmark: { goToBookmark(at: index) },
                                 storeBookmark: { storeBookmark(at: index) }
                             )
+                        }
+                    }
+                }
+                if !searchResults.isEmpty || selectedDocument != nil {
+                    // The search field occupies the far trailing position.
+                    // Keep its navigation controls directly beside it.
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        if !searchResults.isEmpty {
+                            Button("Previous match", systemImage: "chevron.up") {
+                                moveSearchResult(by: -1)
+                            }
+                            Button("Next match", systemImage: "chevron.down") {
+                                moveSearchResult(by: 1)
+                            }
+                            Text("\(currentSearchResultIndex + 1) of \(searchResults.count)")
+                                .font(.caption)
+                                .monospacedDigit()
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        if let document = selectedDocument {
+                            // Reading this state refreshes the toolbar after
+                            // the document's transient history changes.
+                            let historyControlsAreCurrent = navigationRevision >= 0
+                            Button("Back", systemImage: "chevron.backward") {
+                                navigateBack(in: document)
+                            }
+                            .disabled(!document.canNavigateBack || !historyControlsAreCurrent)
+
+                            Button("Forward", systemImage: "chevron.forward") {
+                                navigateForward(in: document)
+                            }
+                            .disabled(!document.canNavigateForward || !historyControlsAreCurrent)
                         }
                     }
                 }
