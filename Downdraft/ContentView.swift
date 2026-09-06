@@ -164,6 +164,8 @@ struct ContentView: View {
             }
         }
         .searchable(text: $searchText, prompt: "Find in PDF")
+        .statusBarHidden(isReaderFocused)
+        .persistentSystemOverlays(isReaderFocused ? .hidden : .visible)
         .onSubmit(of: .search) {
             performSearch()
         }
