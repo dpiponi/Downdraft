@@ -480,11 +480,11 @@ private final class BookmarkSlotControl: UIControl {
         let mutedColor = isSet ? tintColor.withAlphaComponent(0.18) : .clear
         let brightColor = isSet ? tintColor.withAlphaComponent(0.48) : .clear
         if !wasFlashing && isFlashing {
-            playPing()
             UIView.animate(withDuration: 0.12, delay: 0, options: [.beginFromCurrentState]) {
                 self.backgroundColor = brightColor
             }
         } else if wasFlashing && !isFlashing {
+            playPing()
             UIView.animate(withDuration: 0.35, delay: 0, options: [.beginFromCurrentState]) {
                 self.backgroundColor = mutedColor
             }
@@ -504,15 +504,15 @@ private final class BookmarkSlotControl: UIControl {
 
         let scale = CABasicAnimation(keyPath: "transform.scale")
         scale.fromValue = 1
-        scale.toValue = 1.55
+        scale.toValue = 1.3
 
         let opacity = CABasicAnimation(keyPath: "opacity")
-        opacity.fromValue = 0.8
+        opacity.fromValue = 1
         opacity.toValue = 0
 
         let ping = CAAnimationGroup()
         ping.animations = [scale, opacity]
-        ping.duration = 0.5
+        ping.duration = 0.35
         ping.timingFunction = CAMediaTimingFunction(name: .easeOut)
         pulseLayer.add(ping, forKey: "bookmarkPing")
     }
