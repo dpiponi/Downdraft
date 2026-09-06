@@ -70,24 +70,18 @@ struct ContentView: View {
                                     ProgressView()
                                 }
 
+                                if !isPhone, !isReaderFocused,
+                                   let document = selectedDocument,
+                                   let pdfDocument = document.pdfDocument {
+                                    scrubber(for: pdfDocument)
+                                        .padding(.bottom, 24)
+                                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                                }
                             }
 
-                            if !isReaderFocused, let document = selectedDocument,
+                            if isPhone, !isReaderFocused, let document = selectedDocument,
                                let pdfDocument = document.pdfDocument {
-                                PageScrubber(
-                                    pageIndex: scrubbedPageIndex,
-                                    pageCount: pdfDocument.pageCount,
-                                    seek: { requestedPageIndex = $0 },
-                                    commit: { sourcePageIndex, destinationPageIndex in
-                                        guard let document = selectedDocument else { return }
-                                        recordNavigation(
-                                            in: document,
-                                            from: sourcePageIndex,
-                                            to: destinationPageIndex
-                                        )
-                                    }
-                                )
-                                .id(scrubberRevision)
+                                scrubber(for: pdfDocument)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                             }
                         }
@@ -354,6 +348,24 @@ struct ContentView: View {
             .allowsHitTesting(isSelected)
             .accessibilityHidden(!isSelected)
         }
+    }
+
+    private func scrubber(for document: PDFDocument) -> some View {
+        PageScrubber(
+            pageIndex: scrubbedPageIndex,
+            pageCount: document.pageCount,
+            seek: { requestedPageIndex = $0 },
+            commit: { sourcePageIndex, destinationPageIndex in
+                guard let selectedDocument else { return }
+                recordNavigation(
+                    in: selectedDocument,
+                    from: sourcePageIndex,
+                    to: destinationPageIndex
+                )
+            }
+        )
+        .id(scrubberRevision)
+        .frame(maxWidth: .infinity)
     }
 
     private var isLandscapeInterface: Bool {
