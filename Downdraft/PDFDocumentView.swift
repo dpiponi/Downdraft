@@ -196,9 +196,7 @@ extension PDFDocumentView.Coordinator: UIGestureRecognizerDelegate {
         // chrome gesture recognize alongside a link, since revealing or
         // hiding the UI changes the PDF view's size before PDFKit resolves
         // the link destination.
-        guard let page = pdfView.page(for: location, nearest: false) else {
-            return true
-        }
+        guard let page = pdfView.page(for: location, nearest: false) else { return false }
         let pointOnPage = pdfView.convert(location, to: page)
         return page.annotation(at: pointOnPage)?.type?.lowercased() != "link"
     }
