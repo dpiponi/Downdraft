@@ -13,6 +13,7 @@ struct PDFDocumentView: UIViewRepresentable {
     var outlineDestination: PDFDestination?
     var requestedPageIndex: Int?
     var onPageChanged: (Int) -> Void = { _ in }
+    var onCenterTap: () -> Void = { }
 
     func makeUIView(context: Context) -> PDFView {
         let view = PagePreservingPDFView()
@@ -20,11 +21,14 @@ struct PDFDocumentView: UIViewRepresentable {
         view.displayDirection = .vertical
         view.displayMode = .singlePageContinuous
         context.coordinator.startObservingPageChanges(in: view)
+        context.coordinator.startObservingReaderTaps(in: view)
         return view
     }
 
     func updateUIView(_ pdfView: PDFView, context: Context) {
         context.coordinator.onPageChanged = onPageChanged
+        context.coordinator.onCenterTap = onCenterTap
+        context.coordinator.disableDoubleTapZoom(in: pdfView)
         if context.coordinator.loadedDocument !== document {
             pdfView.document = document
             if let page = pdfView.document?.page(at: initialPageIndex) {
@@ -59,6 +63,7 @@ struct PDFDocumentView: UIViewRepresentable {
     final class Coordinator: NSObject {
         var loadedDocument: PDFDocument?
         var onPageChanged: (Int) -> Void = { _ in }
+        var onCenterTap: () -> Void = { }
         private var isReaderFocused = false
         private var appliedReaderFocus: Bool?
         private var isLandscape = false
@@ -74,6 +79,25 @@ struct PDFDocumentView: UIViewRepresentable {
                 name: .PDFViewPageChanged,
                 object: pdfView
             )
+        }
+
+        func startObservingReaderTaps(in pdfView: PDFView) {
+            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(readerTapped))
+            tapGesture.cancelsTouchesInView = true
+            tapGesture.delegate = self
+            pdfView.addGestureRecognizer(tapGesture)
+        }
+
+        func disableDoubleTapZoom(in pdfView: PDFView) {
+            for recognizer in tapGestures(in: pdfView)
+            where recognizer.numberOfTapsRequired > 1 {
+                recognizer.isEnabled = false
+            }
+        }
+
+        private func tapGestures(in view: UIView) -> [UITapGestureRecognizer] {
+            let local = (view.gestureRecognizers ?? []).compactMap { $0 as? UITapGestureRecognizer }
+            return local + view.subviews.flatMap(tapGestures(in:))
         }
 
         func updateReaderFocus(_ isFocused: Bool, isActive: Bool, in pdfView: PDFView) {
@@ -144,9 +168,27 @@ struct PDFDocumentView: UIViewRepresentable {
             onPageChanged(pageIndex)
         }
 
+        @objc private func readerTapped() {
+            onCenterTap()
+        }
+
         deinit {
             NotificationCenter.default.removeObserver(self)
         }
+    }
+}
+
+extension PDFDocumentView.Coordinator: UIGestureRecognizerDelegate {
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let tapGesture = gestureRecognizer as? UITapGestureRecognizer,
+              let pdfView = tapGesture.view as? PDFView else { return false }
+
+        // Let PDFKit handle an annotation link normally; every other
+        // stationary single tap is a reader-chrome toggle.
+        let location = tapGesture.location(in: pdfView)
+        guard let page = pdfView.page(for: location, nearest: false) else { return true }
+        let pointOnPage = pdfView.convert(location, to: page)
+        return page.annotation(at: pointOnPage)?.type?.lowercased() != "link"
     }
 }
 
