@@ -71,19 +71,12 @@ struct ContentView: View {
                                     ProgressView()
                                 }
 
-                                if !isPhone, !isReaderFocused,
-                                   let document = selectedDocument,
-                                   let pdfDocument = document.pdfDocument {
-                                    scrubber(for: pdfDocument)
-                                        .padding(.bottom, 24)
-                                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                                }
                             }
 
-                            if isPhone, !isReaderFocused, let document = selectedDocument,
+                            if !isReaderFocused, let document = selectedDocument,
                                let pdfDocument = document.pdfDocument {
                                 scrubber(for: pdfDocument)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
                             }
                         }
                         .animation(.easeInOut(duration: 0.24), value: isReaderFocused)
