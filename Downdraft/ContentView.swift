@@ -416,6 +416,7 @@ private final class BookmarkSlotControl: UIControl {
     private var storeBookmark: () -> Void = { }
     private var didStoreDuringTouch = false
     private var wasFlashing = false
+    private let pulseLayer = CAShapeLayer()
 
     override var intrinsicContentSize: CGSize {
         CGSize(width: 36, height: 36)
@@ -434,6 +435,10 @@ private final class BookmarkSlotControl: UIControl {
         longPress.cancelsTouchesInView = false
         addGestureRecognizer(longPress)
 
+        pulseLayer.fillColor = UIColor.clear.cgColor
+        pulseLayer.lineWidth = 1.5
+        layer.insertSublayer(pulseLayer, at: 0)
+
         isAccessibilityElement = true
         accessibilityTraits = .button
     }
@@ -446,6 +451,8 @@ private final class BookmarkSlotControl: UIControl {
         super.layoutSubviews()
         label.frame = bounds
         layer.cornerRadius = bounds.height / 2
+        pulseLayer.frame = bounds
+        pulseLayer.path = UIBezierPath(ovalIn: bounds.insetBy(dx: 1, dy: 1)).cgPath
     }
 
     func configure(
@@ -462,6 +469,7 @@ private final class BookmarkSlotControl: UIControl {
         let mutedColor = isSet ? tintColor.withAlphaComponent(0.18) : .clear
         let brightColor = isSet ? tintColor.withAlphaComponent(0.48) : .clear
         if !wasFlashing && isFlashing {
+            playPing()
             UIView.animate(withDuration: 0.12, delay: 0, options: [.beginFromCurrentState]) {
                 self.backgroundColor = brightColor
             }
@@ -477,6 +485,25 @@ private final class BookmarkSlotControl: UIControl {
         accessibilityHint = isSet
             ? "Double tap to go to its saved page. Press and hold to replace it with the current page."
             : "Press and hold to save the current page."
+    }
+
+    private func playPing() {
+        pulseLayer.removeAllAnimations()
+        pulseLayer.strokeColor = tintColor.cgColor
+
+        let scale = CABasicAnimation(keyPath: "transform.scale")
+        scale.fromValue = 1
+        scale.toValue = 1.55
+
+        let opacity = CABasicAnimation(keyPath: "opacity")
+        opacity.fromValue = 0.8
+        opacity.toValue = 0
+
+        let ping = CAAnimationGroup()
+        ping.animations = [scale, opacity]
+        ping.duration = 0.5
+        ping.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        pulseLayer.add(ping, forKey: "bookmarkPing")
     }
 
     @objc private func tapped() {
