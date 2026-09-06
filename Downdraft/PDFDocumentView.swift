@@ -28,6 +28,7 @@ struct PDFDocumentView: UIViewRepresentable {
     func updateUIView(_ pdfView: PDFView, context: Context) {
         context.coordinator.onPageChanged = onPageChanged
         context.coordinator.onCenterTap = onCenterTap
+        context.coordinator.prioritizeCenterTap(in: pdfView)
         if context.coordinator.loadedDocument !== document {
             pdfView.document = document
             if let page = pdfView.document?.page(at: initialPageIndex) {
@@ -70,6 +71,7 @@ struct PDFDocumentView: UIViewRepresentable {
         private var displayedSearchSelection: PDFSelection?
         private var displayedOutlineDestination: PDFDestination?
         private var displayedRequestedPageIndex: Int?
+        private weak var centerTapGesture: UITapGestureRecognizer?
         var lastKnownPageIndex = 0
         func startObservingPageChanges(in pdfView: PDFView) {
             NotificationCenter.default.addObserver(
@@ -85,6 +87,19 @@ struct PDFDocumentView: UIViewRepresentable {
             tapGesture.cancelsTouchesInView = true
             tapGesture.delegate = self
             pdfView.addGestureRecognizer(tapGesture)
+            centerTapGesture = tapGesture
+        }
+
+        func prioritizeCenterTap(in pdfView: PDFView) {
+            guard let centerTapGesture else { return }
+            for recognizer in tapGestures(in: pdfView) where recognizer !== centerTapGesture {
+                recognizer.require(toFail: centerTapGesture)
+            }
+        }
+
+        private func tapGestures(in view: UIView) -> [UITapGestureRecognizer] {
+            let localGestures = (view.gestureRecognizers ?? []).compactMap { $0 as? UITapGestureRecognizer }
+            return localGestures + view.subviews.flatMap(tapGestures(in:))
         }
 
         func updateReaderFocus(_ isFocused: Bool, isActive: Bool, in pdfView: PDFView) {
