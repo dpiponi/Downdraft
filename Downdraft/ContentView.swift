@@ -89,6 +89,7 @@ struct ContentView: View {
                     }
                 }
             }
+            .ignoresSafeArea(edges: isReaderFocused ? .all : [])
             .toolbar(isReaderFocused ? .hidden : .visible, for: .navigationBar)
             .toolbarBackground(
                 isReaderFocused ? .hidden : .visible,
