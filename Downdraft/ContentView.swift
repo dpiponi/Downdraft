@@ -415,6 +415,7 @@ private final class BookmarkSlotControl: UIControl {
     private var goToBookmark: () -> Void = { }
     private var storeBookmark: () -> Void = { }
     private var didStoreDuringTouch = false
+    private var wasFlashing = false
 
     override var intrinsicContentSize: CGSize {
         CGSize(width: 36, height: 36)
@@ -458,9 +459,20 @@ private final class BookmarkSlotControl: UIControl {
         self.storeBookmark = storeBookmark
         label.text = "\(number)"
         label.font = .monospacedDigitSystemFont(ofSize: 17, weight: isSet ? .semibold : .regular)
-        backgroundColor = isSet
-            ? tintColor.withAlphaComponent(isFlashing ? 0.48 : 0.18)
-            : .clear
+        let mutedColor = isSet ? tintColor.withAlphaComponent(0.18) : .clear
+        let brightColor = isSet ? tintColor.withAlphaComponent(0.48) : .clear
+        if !wasFlashing && isFlashing {
+            UIView.animate(withDuration: 0.12, delay: 0, options: [.beginFromCurrentState]) {
+                self.backgroundColor = brightColor
+            }
+        } else if wasFlashing && !isFlashing {
+            UIView.animate(withDuration: 0.35, delay: 0, options: [.beginFromCurrentState]) {
+                self.backgroundColor = mutedColor
+            }
+        } else {
+            backgroundColor = isFlashing ? brightColor : mutedColor
+        }
+        wasFlashing = isFlashing
         accessibilityLabel = "Bookmark \(number)"
         accessibilityHint = isSet
             ? "Double tap to go to its saved page. Press and hold to replace it with the current page."
