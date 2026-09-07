@@ -19,6 +19,8 @@ struct ContentView: View {
     @State private var scrubbedPageIndex = 0
     @State private var requestedPageIndex: Int?
     @State private var bookmarkPageIndices: [Int?] = [nil, nil, nil]
+    // Forces SwiftUI to refresh history-button availability after mutating a
+    // reference-type document's navigation history.
     @State private var navigationRevision = 0
     @State private var scrubberRevision = 0
     @State private var deviceOrientation = UIDevice.current.orientation
@@ -79,156 +81,7 @@ struct ContentView: View {
             // new layout and may reset its private scroll view.  The reader's
             // chrome is therefore a sibling overlay, never a toolbar.
             .toolbar(.hidden, for: .navigationBar)
-            .toolbar {
-                if !isReaderFocused {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Open PDF", systemImage: "folder") {
-                        isShowingFilePicker = true
-                    }
-                }
-                if isPhone {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Search", systemImage: "magnifyingglass") {
-                            isSearchPresented = true
-                        }
-                    }
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    Menu(selectedDocument?.displayName ?? "Documents", systemImage: "doc.on.doc") {
-                        ForEach(documents) { document in
-                            Button(document.displayName) {
-                                selectDocument(document.id)
-                            }
-                        }
-                        if selectedDocument != nil {
-                            Divider()
-                            Button("Close Current Document", role: .destructive) {
-                                if let id = selectedDocumentID { close(id) }
-                            }
-                        }
-                    }
-                }
-                if isPhone {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu("More", systemImage: "ellipsis.circle") {
-                            if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
-                                Button("Contents", systemImage: "list.bullet") {
-                                    isShowingContents = true
-                                }
-                            }
-                        }
-                    }
-                    if selectedDocument != nil {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Bookmarks", systemImage: "bookmark") {
-                                isShowingBookmarks = true
-                            }
-                        }
-                    }
-                }
-                if !isPhone, selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Contents", systemImage: "list.bullet") {
-                            isShowingContents = true
-                        }
-                    }
-                }
-                if !isPhone, selectedDocument != nil {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            setFirstPageCover(!treatsFirstPageAsCover)
-                        } label: {
-                            Image(systemName: treatsFirstPageAsCover
-                                ? "rectangle.split.2x1"
-                                : "rectangle")
-                        }
-                        .accessibilityLabel(
-                            treatsFirstPageAsCover
-                                ? "Show first page in facing pages"
-                                : "Show first page as a cover"
-                        )
-                    }
-                }
-                if !isPhone, selectedDocument != nil {
-                    ToolbarItemGroup(placement: .topBarTrailing) {
-                        ForEach(0..<3, id: \.self) { index in
-                            BookmarkSlotButton(
-                                number: index + 1,
-                                isSet: bookmarkPageIndices[index] != nil,
-                                goToBookmark: { goToBookmark(at: index) },
-                                storeBookmark: { storeBookmark(at: index) }
-                            )
-                        }
-                    }
-                }
-                if !isPhone, !searchResults.isEmpty || selectedDocument != nil {
-                    // The search field occupies the far trailing position.
-                    // Keep its navigation controls directly beside it.
-                    ToolbarItemGroup(placement: .topBarTrailing) {
-                        if !searchResults.isEmpty {
-                            Button("Previous match", systemImage: "chevron.up") {
-                                moveSearchResult(by: -1)
-                            }
-                            Button("Next match", systemImage: "chevron.down") {
-                                moveSearchResult(by: 1)
-                            }
-                            Text("\(currentSearchResultIndex + 1) of \(searchResults.count)")
-                                .font(.caption)
-                                .monospacedDigit()
-                                .fixedSize(horizontal: true, vertical: false)
-                        }
-                        if let document = selectedDocument {
-                            // Reading this state refreshes the toolbar after
-                            // the document's transient history changes.
-                            let historyControlsAreCurrent = navigationRevision >= 0
-                            Button("Back", systemImage: "chevron.backward") {
-                                navigateBack(in: document)
-                            }
-                            .disabled(!document.canNavigateBack || !historyControlsAreCurrent)
-
-                            Button("Forward", systemImage: "chevron.forward") {
-                                navigateForward(in: document)
-                            }
-                            .disabled(!document.canNavigateForward || !historyControlsAreCurrent)
-                        }
-                    }
-                }
-                if isPhone, !isReaderFocused, !searchResults.isEmpty || selectedDocument != nil {
-                    ToolbarItemGroup(placement: .bottomBar) {
-                        if let document = selectedDocument {
-                            let historyControlsAreCurrent = navigationRevision >= 0
-                            Button("Back", systemImage: "chevron.backward") {
-                                navigateBack(in: document)
-                            }
-                            .disabled(!document.canNavigateBack || !historyControlsAreCurrent)
-
-                            Button("Forward", systemImage: "chevron.forward") {
-                                navigateForward(in: document)
-                            }
-                            .disabled(!document.canNavigateForward || !historyControlsAreCurrent)
-                        }
-                        if !searchResults.isEmpty {
-                            Spacer()
-                            Button("Previous match", systemImage: "chevron.up") {
-                                moveSearchResult(by: -1)
-                            }
-                            Button("Next match", systemImage: "chevron.down") {
-                                moveSearchResult(by: 1)
-                            }
-                            Text("\(currentSearchResultIndex + 1) of \(searchResults.count)")
-                                .font(.caption)
-                                .monospacedDigit()
-                        }
-                    }
-                }
-                }
-            }
         }
-        .readerSearchable(
-            false,
-            text: $searchText,
-            isPresented: $isSearchPresented
-        )
         // Changing `statusBarHidden` changes the hosting controller's safe
         // area, which makes PDFKit relayout even though the status bar is an
         // overlay. Persistent system overlays handle reader-mode chrome
@@ -330,12 +183,10 @@ struct ContentView: View {
             PDFDocumentView(
                 document: pdfDocument,
                 initialPageIndex: document.lastPageIndex,
-                isActive: isSelected,
                 isReaderFocused: isReaderFocused,
                 isLandscape: !isPhone && isLandscapeInterface,
                 displaysAsBook: treatsFirstPageAsCover,
                 searchSelection: isSelected ? currentSearchSelection : nil,
-                searchSelections: isSelected ? searchResults : [],
                 outlineDestination: isSelected ? outlineDestination : nil,
                 requestedPageIndex: isSelected ? requestedPageIndex : nil,
                 onPageChanged: { pageIndex in
@@ -791,21 +642,6 @@ struct ContentView: View {
 
     private func saveDocuments() {
         OpenDocument.save(documents)
-    }
-}
-
-private extension View {
-    @ViewBuilder
-    func readerSearchable(
-        _ isEnabled: Bool,
-        text: Binding<String>,
-        isPresented: Binding<Bool>
-    ) -> some View {
-        if isEnabled {
-            searchable(text: text, isPresented: isPresented, prompt: "Find in PDF")
-        } else {
-            self
-        }
     }
 }
 

@@ -4,12 +4,10 @@ import SwiftUI
 struct PDFDocumentView: UIViewRepresentable {
     let document: PDFDocument
     var initialPageIndex = 0
-    var isActive = false
     var isReaderFocused = false
     var isLandscape = false
     var displaysAsBook = true
     var searchSelection: PDFSelection?
-    var searchSelections: [PDFSelection] = []
     var outlineDestination: PDFDestination?
     var requestedPageIndex: Int?
     var onPageChanged: (Int) -> Void = { _ in }
@@ -40,7 +38,7 @@ struct PDFDocumentView: UIViewRepresentable {
                 in: pdfView
             )
         }
-        context.coordinator.updateSearchHighlights(searchSelections, in: pdfView)
+        context.coordinator.clearPDFKitSearchHighlights(in: pdfView)
         context.coordinator.updateSearchSelection(searchSelection, in: pdfView)
         context.coordinator.updateOutlineDestination(outlineDestination, in: pdfView)
         context.coordinator.updateRequestedPage(requestedPageIndex, in: pdfView)
@@ -49,11 +47,7 @@ struct PDFDocumentView: UIViewRepresentable {
             displaysAsBook: displaysAsBook,
             in: pdfView
         )
-        context.coordinator.updateReaderFocus(
-            isReaderFocused,
-            isActive: isActive,
-            in: pdfView
-        )
+        context.coordinator.updateReaderFocus(isReaderFocused)
     }
 
     func makeCoordinator() -> Coordinator {
@@ -148,7 +142,7 @@ struct PDFDocumentView: UIViewRepresentable {
             return local + view.subviews.flatMap(scrollViews(in:))
         }
 
-        func updateReaderFocus(_ isFocused: Bool, isActive: Bool, in pdfView: PDFView) {
+        func updateReaderFocus(_ isFocused: Bool) {
             isReaderFocused = isFocused
             // Reader chrome is now a sibling overlay, so this state must not
             // cause a PDFKit resize or a compensating navigation.
@@ -203,7 +197,7 @@ struct PDFDocumentView: UIViewRepresentable {
             }
         }
 
-        func updateSearchHighlights(_ selections: [PDFSelection], in pdfView: PDFView) {
+        func clearPDFKitSearchHighlights(in pdfView: PDFView) {
             // On iPadOS 26, PDFKit can abort inside its private
             // `addSearchSelection` layer renderer (including while merely
             // changing pages).  Keep search navigation, but do not ask that
