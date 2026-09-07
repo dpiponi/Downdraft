@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var searchResults: [PDFSelection] = []
     @State private var currentSearchResultIndex = 0
     @State private var isShowingContents = false
+    @State private var isShowingMetadata = false
     @State private var outlineDestination: PDFDestination?
     @State private var treatsFirstPageAsCover = true
     @State private var scrubbedPageIndex = 0
@@ -108,6 +109,11 @@ struct ContentView: View {
                     outlineDestination = destination
                     isShowingContents = false
                 }
+            }
+        }
+        .sheet(isPresented: $isShowingMetadata) {
+            if let document = selectedDocument, let pdfDocument = document.pdfDocument {
+                PDFMetadataView(document: pdfDocument, filename: document.displayName)
             }
         }
         .sheet(isPresented: $isShowingBookmarks) {
@@ -309,6 +315,10 @@ struct ContentView: View {
                     }
                     .accessibilityLabel("Contents")
                 }
+                Button { isShowingMetadata = true } label: {
+                    Image(systemName: "info.circle")
+                }
+                .accessibilityLabel("PDF information")
                 Button {
                     setFirstPageCover(!treatsFirstPageAsCover)
                 } label: {
@@ -334,6 +344,7 @@ struct ContentView: View {
                     if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
                         Button("Contents", systemImage: "list.bullet") { isShowingContents = true }
                     }
+                    Button("PDF Information", systemImage: "info.circle") { isShowingMetadata = true }
                 }
             }
         }
@@ -952,6 +963,67 @@ private struct TableOfContentsView: View {
                 }
             }
         }
+    }
+}
+
+private struct PDFMetadataView: View {
+    let document: PDFDocument
+    let filename: String
+    @Environment(\.dismiss) private var dismiss
+
+    private var rows: [(label: String, value: String)] {
+        let attributes = document.documentAttributes ?? [:]
+        let keys: [(String, PDFDocumentAttribute)] = [
+            ("Title", .titleAttribute),
+            ("Author", .authorAttribute),
+            ("Subject", .subjectAttribute),
+            ("Keywords", .keywordsAttribute),
+            ("Creator", .creatorAttribute),
+            ("Producer", .producerAttribute),
+            ("Created", .creationDateAttribute),
+            ("Modified", .modificationDateAttribute)
+        ]
+        return keys.compactMap { label, key in
+            guard let value = attributes[key] else { return nil }
+            return (label, formatted(value))
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Document") {
+                    LabeledContent("File", value: filename)
+                    LabeledContent("Pages", value: String(document.pageCount))
+                }
+                if !rows.isEmpty {
+                    Section("Metadata") {
+                        ForEach(rows, id: \.label) { row in
+                            LabeledContent(row.label) {
+                                Text(row.value)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("PDF Information")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func formatted(_ value: Any) -> String {
+        if let date = value as? Date {
+            return date.formatted(date: .abbreviated, time: .shortened)
+        }
+        if let values = value as? [String] {
+            return values.joined(separator: ", ")
+        }
+        return String(describing: value)
     }
 }
 
