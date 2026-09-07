@@ -61,19 +61,21 @@ struct ContentView: View {
                                     ProgressView()
                                 }
 
-                            }
-
-                            if !isReaderFocused, let document = selectedDocument,
-                               let pdfDocument = document.pdfDocument {
-                                scrubber(for: pdfDocument)
-                                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                                if !isReaderFocused, let document = selectedDocument,
+                                   let pdfDocument = document.pdfDocument {
+                                    scrubber(for: pdfDocument)
+                                        .padding(.bottom, isPhone ? 58 : 24)
+                                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                                }
                             }
                         }
                         .animation(.easeInOut(duration: 0.24), value: isReaderFocused)
                     }
                 }
             }
-            .ignoresSafeArea(edges: isReaderFocused ? .all : [])
+            // The PDF's frame stays fixed. Reader chrome floats over it,
+            // rather than forcing PDFKit to redraw during every transition.
+            .ignoresSafeArea(edges: .all)
             .toolbar(isReaderFocused ? .hidden : .visible, for: .navigationBar)
             .toolbarBackground(
                 isReaderFocused ? .hidden : .visible,

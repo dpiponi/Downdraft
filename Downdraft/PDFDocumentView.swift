@@ -106,11 +106,7 @@ struct PDFDocumentView: UIViewRepresentable {
         func updateReaderFocus(_ isFocused: Bool, isActive: Bool, in pdfView: PDFView) {
             isReaderFocused = isFocused
             guard isActive, appliedReaderFocus != isFocused else { return }
-            let hadAppliedReaderFocus = appliedReaderFocus != nil
             appliedReaderFocus = isFocused
-            if hadAppliedReaderFocus {
-                (pdfView as? PagePreservingPDFView)?.animateNextResize()
-            }
         }
 
         func updatePageLayout(isLandscape: Bool, displaysAsBook: Bool, in pdfView: PDFView) {
@@ -209,26 +205,9 @@ extension PDFDocumentView.Coordinator: UIGestureRecognizerDelegate {
 }
 
 private final class PagePreservingPDFView: PDFView {
-    private var previousBoundsSize = CGSize.zero
-    private var shouldAnimateNextResize = false
-
-    func animateNextResize() {
-        shouldAnimateNextResize = true
-    }
-
     override func layoutSubviews() {
-        let sizeChanged = previousBoundsSize != .zero && bounds.size != previousBoundsSize
         super.layoutSubviews()
         disableScrollToTop(in: self)
-        previousBoundsSize = bounds.size
-
-        guard shouldAnimateNextResize, sizeChanged, window != nil else { return }
-        shouldAnimateNextResize = false
-        let transition = CATransition()
-        transition.type = .fade
-        transition.duration = 0.22
-        transition.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        layer.add(transition, forKey: "readerFocusResize")
     }
 
     private func disableScrollToTop(in view: UIView) {
