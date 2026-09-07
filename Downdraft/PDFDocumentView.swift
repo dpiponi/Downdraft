@@ -262,6 +262,10 @@ struct PDFDocumentView: UIViewRepresentable {
             let location = recognizer.location(in: pdfView)
             pendingSearchHighlight = nil
             hideSearchHighlight()
+            if pdfView.currentSelection != nil {
+                pdfView.currentSelection = nil
+                return
+            }
             guard let page = pdfView.page(for: location, nearest: false) else {
                 onCenterTap()
                 return
