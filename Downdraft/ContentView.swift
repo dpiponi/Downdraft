@@ -61,11 +61,13 @@ struct ContentView: View {
                                     ProgressView()
                                 }
 
-                                if !isReaderFocused, let document = selectedDocument,
-                                   let pdfDocument = document.pdfDocument {
-                                    scrubber(for: pdfDocument)
-                                        .padding(.bottom, isPhone ? 58 : 24)
-                                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                                if !isReaderFocused,
+                                   let pdfDocument = selectedDocument?.pdfDocument {
+                                    readerChrome(for: pdfDocument)
+                                        .transition(.asymmetric(
+                                            insertion: .move(edge: .top).combined(with: .opacity),
+                                            removal: .move(edge: .top).combined(with: .opacity)
+                                        ))
                                 }
                             }
                         }
@@ -76,7 +78,7 @@ struct ContentView: View {
             // The PDF's frame stays fixed. Reader chrome floats over it,
             // rather than forcing PDFKit to redraw during every transition.
             .ignoresSafeArea(edges: .all)
-            .toolbar(.visible, for: .navigationBar)
+            .toolbar(.hidden, for: .navigationBar)
             .toolbarBackground(
                 isReaderFocused ? .hidden : .visible,
                 for: .navigationBar
@@ -227,13 +229,13 @@ struct ContentView: View {
             }
         }
         .readerSearchable(
-            !isReaderFocused,
+            false,
             text: $searchText,
             isPresented: $isSearchPresented
         )
         .statusBarHidden(isReaderFocused)
         .persistentSystemOverlays(isReaderFocused ? .hidden : .visible)
-        .toolbar(.visible, for: .bottomBar)
+        .toolbar(.hidden, for: .bottomBar)
         .onSubmit(of: .search) {
             performSearch()
         }
@@ -372,6 +374,127 @@ struct ContentView: View {
         )
         .id(scrubberRevision)
         .frame(maxWidth: .infinity)
+    }
+
+    private func readerChrome(for document: PDFDocument) -> some View {
+        VStack(spacing: 10) {
+            topReaderControls
+            Spacer()
+            VStack(spacing: 8) {
+                if isPhone {
+                    historyAndSearchControls
+                }
+                scrubber(for: document)
+            }
+        }
+        .padding(.top, isPhone ? 58 : 26)
+        .padding(.bottom, 20)
+        .animation(.easeInOut(duration: 0.24), value: isSearchPresented)
+    }
+
+    private var topReaderControls: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 10) {
+                documentSelector
+                if !isPhone {
+                    historyControls
+                }
+                Spacer(minLength: 0)
+                Button("Open PDF", systemImage: "folder") { isShowingFilePicker = true }
+                if isPhone {
+                    Button("Search", systemImage: "magnifyingglass") { isSearchPresented = true }
+                    Button("Bookmarks", systemImage: "bookmark") { isShowingBookmarks = true }
+                    Menu("More", systemImage: "ellipsis.circle") {
+                        if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
+                            Button("Contents", systemImage: "list.bullet") { isShowingContents = true }
+                        }
+                    }
+                } else {
+                    if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
+                        Button("Contents", systemImage: "list.bullet") { isShowingContents = true }
+                    }
+                    Button {
+                        setFirstPageCover(!treatsFirstPageAsCover)
+                    } label: {
+                        Image(systemName: treatsFirstPageAsCover ? "rectangle.split.2x1" : "rectangle")
+                    }
+                    ForEach(0..<3, id: \.self) { index in
+                        BookmarkSlotButton(
+                            number: index + 1,
+                            isSet: bookmarkPageIndices[index] != nil,
+                            goToBookmark: { goToBookmark(at: index) },
+                            storeBookmark: { storeBookmark(at: index) }
+                        )
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(.bar, in: Capsule())
+
+            if !isPhone || isSearchPresented {
+                HStack(spacing: 8) {
+                    TextField("Find in PDF", text: $searchText)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit(performSearch)
+                    if !isPhone {
+                        searchMatchControls
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(.bar, in: Capsule())
+            }
+        }
+        .padding(.horizontal, 12)
+    }
+
+    private var documentSelector: some View {
+        Menu(selectedDocument?.displayName ?? "Documents", systemImage: "doc.on.doc") {
+            ForEach(documents) { document in
+                Button(document.displayName) { selectDocument(document.id) }
+            }
+            if let id = selectedDocumentID {
+                Divider()
+                Button("Close Current Document", role: .destructive) { close(id) }
+            }
+        }
+    }
+
+    private var historyControls: some View {
+        HStack(spacing: 6) {
+            if let document = selectedDocument {
+                Button("Back", systemImage: "chevron.backward") { navigateBack(in: document) }
+                    .disabled(!document.canNavigateBack)
+                Button("Forward", systemImage: "chevron.forward") { navigateForward(in: document) }
+                    .disabled(!document.canNavigateForward)
+            }
+        }
+    }
+
+    private var searchMatchControls: some View {
+        HStack(spacing: 6) {
+            if !searchResults.isEmpty {
+                Button("Previous match", systemImage: "chevron.up") { moveSearchResult(by: -1) }
+                Button("Next match", systemImage: "chevron.down") { moveSearchResult(by: 1) }
+                Text("\(currentSearchResultIndex + 1) of \(searchResults.count)")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .fixedSize()
+            }
+        }
+    }
+
+    private var historyAndSearchControls: some View {
+        HStack {
+            historyControls
+            Spacer()
+            searchMatchControls
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(.bar, in: Capsule())
+        .padding(.horizontal, 12)
     }
 
     private var isLandscapeInterface: Bool {
