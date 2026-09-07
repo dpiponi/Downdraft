@@ -76,12 +76,13 @@ struct ContentView: View {
             // The PDF's frame stays fixed. Reader chrome floats over it,
             // rather than forcing PDFKit to redraw during every transition.
             .ignoresSafeArea(edges: .all)
-            .toolbar(isReaderFocused ? .hidden : .visible, for: .navigationBar)
+            .toolbar(.visible, for: .navigationBar)
             .toolbarBackground(
                 isReaderFocused ? .hidden : .visible,
                 for: .navigationBar
             )
             .toolbar {
+                if !isReaderFocused {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Open PDF", systemImage: "folder") {
                         isShowingFilePicker = true
@@ -222,6 +223,7 @@ struct ContentView: View {
                         }
                     }
                 }
+                }
             }
         }
         .readerSearchable(
@@ -231,7 +233,7 @@ struct ContentView: View {
         )
         .statusBarHidden(isReaderFocused)
         .persistentSystemOverlays(isReaderFocused ? .hidden : .visible)
-        .toolbar(isReaderFocused ? .hidden : .visible, for: .bottomBar)
+        .toolbar(.visible, for: .bottomBar)
         .onSubmit(of: .search) {
             performSearch()
         }
