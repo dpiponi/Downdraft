@@ -425,6 +425,7 @@ struct ContentView: View {
                             goToBookmark: { goToBookmark(at: index) },
                             storeBookmark: { storeBookmark(at: index) }
                         )
+                        .frame(width: 36, height: 36)
                     }
                 }
             }
@@ -450,7 +451,7 @@ struct ContentView: View {
     }
 
     private var documentSelector: some View {
-        Menu(selectedDocument?.displayName ?? "Documents", systemImage: "doc.on.doc") {
+        Menu {
             ForEach(documents) { document in
                 Button(document.displayName) { selectDocument(document.id) }
             }
@@ -458,6 +459,8 @@ struct ContentView: View {
                 Divider()
                 Button("Close Current Document", role: .destructive) { close(id) }
             }
+        } label: {
+            Image(systemName: "doc.on.doc")
         }
     }
 
