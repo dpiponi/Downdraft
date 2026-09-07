@@ -50,16 +50,6 @@ struct ContentView: View {
                 } else {
                     GeometryReader { _ in
                         VStack(spacing: 0) {
-                            if !isReaderFocused && !isPhone {
-                                DocumentTabStrip(
-                                    documents: documents,
-                                    selectedID: selectedDocumentID,
-                                    select: selectDocument,
-                                    close: close
-                                )
-                                .transition(.move(edge: .top).combined(with: .opacity))
-                            }
-
                             // Keep every PDFView in the hierarchy, so switching tabs
                             // retains its zoom level and reading position.
                             ZStack {
@@ -102,22 +92,22 @@ struct ContentView: View {
                         }
                     }
                 }
-                if isPhone {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Menu(selectedDocument?.displayName ?? "Documents", systemImage: "doc.on.doc") {
-                            ForEach(documents) { document in
-                                Button(document.displayName) {
-                                    selectDocument(document.id)
-                                }
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu(selectedDocument?.displayName ?? "Documents", systemImage: "doc.on.doc") {
+                        ForEach(documents) { document in
+                            Button(document.displayName) {
+                                selectDocument(document.id)
                             }
-                            if selectedDocument != nil {
-                                Divider()
-                                Button("Close Current Document", role: .destructive) {
-                                    if let id = selectedDocumentID { close(id) }
-                                }
+                        }
+                        if selectedDocument != nil {
+                            Divider()
+                            Button("Close Current Document", role: .destructive) {
+                                if let id = selectedDocumentID { close(id) }
                             }
                         }
                     }
+                }
+                if isPhone {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu("More", systemImage: "ellipsis.circle") {
                             if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
