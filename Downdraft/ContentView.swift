@@ -297,7 +297,7 @@ struct ContentView: View {
     }
 
     private var primaryReaderControls: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             if !isPhone {
                 Button { isShowingFilePicker = true } label: {
                     Image(systemName: "folder")
