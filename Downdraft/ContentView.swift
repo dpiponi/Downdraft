@@ -52,7 +52,7 @@ struct ContentView: View {
                         VStack(spacing: 0) {
                             // Keep every PDFView in the hierarchy, so switching tabs
                             // retains its zoom level and reading position.
-                            ZStack(alignment: .bottom) {
+                            ZStack {
                                 ForEach(documents) { document in
                                     reader(for: document)
                                 }
@@ -63,9 +63,7 @@ struct ContentView: View {
 
                                 if !isReaderFocused, let document = selectedDocument,
                                    let pdfDocument = document.pdfDocument {
-                                    scrubber(for: pdfDocument)
-                                        .padding(.bottom, isPhone ? 58 : 24)
-                                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                                    readerChrome(for: pdfDocument)
                                 }
                             }
                         }
@@ -76,11 +74,11 @@ struct ContentView: View {
             // The PDF's frame stays fixed. Reader chrome floats over it,
             // rather than forcing PDFKit to redraw during every transition.
             .ignoresSafeArea(edges: .all)
-            .toolbar(.visible, for: .navigationBar)
-            .toolbarBackground(
-                isReaderFocused ? .hidden : .visible,
-                for: .navigationBar
-            )
+            // The system toolbar changes the hosting controller's safe area
+            // while it appears and disappears.  PDFKit interprets that as a
+            // new layout and may reset its private scroll view.  The reader's
+            // chrome is therefore a sibling overlay, never a toolbar.
+            .toolbar(.hidden, for: .navigationBar)
             .toolbar {
                 if !isReaderFocused {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -227,13 +225,17 @@ struct ContentView: View {
             }
         }
         .readerSearchable(
-            !isReaderFocused,
+            false,
             text: $searchText,
             isPresented: $isSearchPresented
         )
-        .statusBarHidden(isReaderFocused)
+        // Changing `statusBarHidden` changes the hosting controller's safe
+        // area, which makes PDFKit relayout even though the status bar is an
+        // overlay. Persistent system overlays handle reader-mode chrome
+        // without changing the PDF view's geometry.
+        .statusBarHidden(false)
         .persistentSystemOverlays(isReaderFocused ? .hidden : .visible)
-        .toolbar(.visible, for: .bottomBar)
+        .toolbar(.hidden, for: .bottomBar)
         .onSubmit(of: .search) {
             performSearch()
         }
@@ -375,6 +377,212 @@ struct ContentView: View {
         )
         .id(scrubberRevision)
         .frame(maxWidth: .infinity)
+    }
+
+    /// Reader controls deliberately sit beside the PDF view, rather than in a
+    /// navigation or bottom toolbar.  They can animate independently without
+    /// changing PDFKit's frame or safe area.
+    private func readerChrome(for document: PDFDocument) -> some View {
+        ZStack {
+            ZStack(alignment: .top) {
+                // Controls do not fill this entire rectangle, but every
+                // point within it is UI space and must not fall through to
+                // the gesture-heavy PDFView underneath.
+                Color.clear
+                    .frame(height: isPhone ? 170 : 140)
+                    .contentShape(Rectangle())
+                    .onTapGesture { }
+
+                VStack(spacing: 0) {
+                    HStack(alignment: .center, spacing: 12) {
+                        documentMenu
+                            .frame(width: 48, height: 48)
+                            .background(.thinMaterial, in: Circle())
+
+                        topReaderControls
+
+                        if !isPhone || isSearchPresented {
+                            searchControls
+                                .frame(maxWidth: isPhone ? .infinity : 500)
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, isPhone ? 56 : 42)
+                    Spacer(minLength: 0)
+                }
+            }
+            .transition(.move(edge: .top).combined(with: .opacity))
+
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                VStack(spacing: 8) {
+                    if isPhone {
+                        historyControls
+                            .padding(.vertical, 8)
+                    }
+                    scrubber(for: document)
+                        .padding(.top, 6)
+                        .padding(.bottom, isPhone ? 14 : 10)
+                }
+                .padding(.horizontal, 12)
+                .background(.bar)
+                .clipShape(Capsule())
+                .padding(.horizontal, 28)
+                .padding(.bottom, isPhone ? 56 : 42)
+            }
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+        .animation(.easeInOut(duration: 0.24), value: isSearchPresented)
+        .allowsHitTesting(true)
+    }
+
+    private var topReaderControls: some View {
+        HStack(spacing: 12) {
+            primaryReaderControls
+            if !isPhone {
+                bookmarkAndHistoryControls
+            }
+        }
+    }
+
+    private var primaryReaderControls: some View {
+        HStack(spacing: 10) {
+            if !isPhone {
+                Button { isShowingFilePicker = true } label: {
+                    Image(systemName: "folder")
+                }
+                .accessibilityLabel("Open PDF")
+                if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
+                    Button { isShowingContents = true } label: {
+                        Image(systemName: "list.bullet")
+                    }
+                    .accessibilityLabel("Contents")
+                }
+                Button {
+                    setFirstPageCover(!treatsFirstPageAsCover)
+                } label: {
+                    Image(systemName: treatsFirstPageAsCover ? "rectangle.split.2x1" : "rectangle")
+                }
+                .accessibilityLabel("Toggle facing-page cover")
+            } else {
+                Button { isShowingFilePicker = true } label: {
+                    Image(systemName: "folder")
+                }
+                .accessibilityLabel("Open PDF")
+                Button {
+                    isSearchPresented.toggle()
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+                .accessibilityLabel("Search")
+                Button { isShowingBookmarks = true } label: {
+                    Image(systemName: "bookmark")
+                }
+                .accessibilityLabel("Bookmarks")
+                Menu("More", systemImage: "ellipsis.circle") {
+                    if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
+                        Button("Contents", systemImage: "list.bullet") { isShowingContents = true }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 58)
+        .background(.thinMaterial, in: Capsule())
+        .tint(.primary)
+        .font(.title3.weight(.medium))
+    }
+
+    private var bookmarkAndHistoryControls: some View {
+        HStack(spacing: 10) {
+            ForEach(0..<3, id: \.self) { index in
+                BookmarkSlotButton(
+                    number: index + 1,
+                    isSet: bookmarkPageIndices[index] != nil,
+                    size: 40,
+                    goToBookmark: { goToBookmark(at: index) },
+                    storeBookmark: { storeBookmark(at: index) }
+                )
+                .frame(width: 40, height: 40)
+            }
+            historyControls
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 58)
+        .background(.thinMaterial, in: Capsule())
+        .tint(.primary)
+        .font(.title3.weight(.medium))
+    }
+
+    private var documentMenu: some View {
+        Menu {
+            ForEach(documents) { document in
+                Button(document.displayName) { selectDocument(document.id) }
+            }
+            if let id = selectedDocumentID {
+                Divider()
+                Button("Close Current Document", role: .destructive) { close(id) }
+            }
+        } label: {
+            Image(systemName: "doc.on.doc")
+                .font(.title3.weight(.medium))
+                .foregroundStyle(.primary)
+        }
+        .accessibilityLabel("Documents")
+        .tint(.primary)
+    }
+
+    private var searchControls: some View {
+        HStack(spacing: 8) {
+            TextField("Find in PDF", text: $searchText)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .onSubmit(performSearch)
+            if !searchResults.isEmpty {
+                Button { moveSearchResult(by: -1) } label: {
+                    Image(systemName: "chevron.up")
+                        .font(.title3.weight(.medium))
+                        .frame(width: 36, height: 36)
+                }
+                .accessibilityLabel("Previous match")
+                Button { moveSearchResult(by: 1) } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.title3.weight(.medium))
+                        .frame(width: 36, height: 36)
+                }
+                .accessibilityLabel("Next match")
+                Text("\(currentSearchResultIndex + 1) of \(searchResults.count)")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .fixedSize()
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 58)
+        .background(.thinMaterial, in: Capsule())
+        .tint(.primary)
+    }
+
+    private var historyControls: some View {
+        HStack(spacing: 10) {
+            if let document = selectedDocument {
+                Button { navigateBack(in: document) } label: {
+                    Image(systemName: "chevron.backward")
+                        .font(.title3.weight(.medium))
+                        .frame(width: 40, height: 40)
+                }
+                .accessibilityLabel("Back")
+                    .disabled(!document.canNavigateBack)
+                Button { navigateForward(in: document) } label: {
+                    Image(systemName: "chevron.forward")
+                        .font(.title3.weight(.medium))
+                        .frame(width: 40, height: 40)
+                }
+                .accessibilityLabel("Forward")
+                    .disabled(!document.canNavigateForward)
+            }
+        }
     }
 
 
@@ -644,7 +852,6 @@ private struct PageScrubber: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 10)
-        .background(.bar)
         .onChange(of: pageIndex) { _, _ in
             // Outside an active drag, the PDF view is authoritative.  This
             // covers links, contents, search, history, bookmarks, and
@@ -679,6 +886,8 @@ private struct BookmarkSlotButton: UIViewRepresentable {
 
 private final class BookmarkSlotControl: UIControl {
     private let label = UILabel()
+    private let holdHint = UILabel()
+    private let holdProgressLayer = CAShapeLayer()
     private var goToBookmark: () -> Void = { }
     private var storeBookmark: () -> Void = { }
     private var didStoreDuringTouch = false
@@ -692,9 +901,26 @@ private final class BookmarkSlotControl: UIControl {
     init(size: CGFloat) {
         self.size = size
         super.init(frame: .zero)
+        isUserInteractionEnabled = true
+        isEnabled = true
         label.textAlignment = .center
         label.adjustsFontForContentSizeCategory = true
         label.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        holdProgressLayer.fillColor = UIColor.clear.cgColor
+        holdProgressLayer.lineWidth = 2.5
+        holdProgressLayer.lineCap = .round
+        holdProgressLayer.strokeEnd = 0
+        holdProgressLayer.opacity = 0
+        layer.addSublayer(holdProgressLayer)
+        holdHint.textAlignment = .center
+        holdHint.font = .systemFont(ofSize: 12, weight: .semibold)
+        holdHint.textColor = .white
+        holdHint.backgroundColor = .systemBlue
+        holdHint.layer.cornerRadius = 10
+        holdHint.clipsToBounds = true
+        holdHint.alpha = 0
+        holdHint.isUserInteractionEnabled = false
+        addSubview(holdHint)
         addSubview(label)
         addTarget(self, action: #selector(pressBegan), for: .touchDown)
         addTarget(self, action: #selector(tapped), for: .touchUpInside)
@@ -716,7 +942,23 @@ private final class BookmarkSlotControl: UIControl {
     override func layoutSubviews() {
         super.layoutSubviews()
         label.frame = bounds
+        holdHint.frame = CGRect(
+            x: (bounds.width - 58) / 2,
+            y: bounds.height + 8,
+            width: 58,
+            height: 20
+        )
         layer.cornerRadius = bounds.height / 2
+        holdProgressLayer.frame = bounds
+        holdProgressLayer.path = UIBezierPath(
+            ovalIn: bounds.insetBy(dx: 3, dy: 3)
+        ).cgPath
+    }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        // The SwiftUI overlay is deliberately just above a gesture-heavy
+        // PDFView.  Keep the whole visual slot an explicit hit target.
+        bounds.insetBy(dx: -6, dy: -6).contains(point)
     }
 
     func configure(
@@ -729,6 +971,7 @@ private final class BookmarkSlotControl: UIControl {
         self.storeBookmark = storeBookmark
         label.text = "\(number)"
         label.font = .monospacedDigitSystemFont(ofSize: 17, weight: isSet ? .semibold : .regular)
+        holdProgressLayer.strokeColor = tintColor.cgColor
         mutedColor = isSet ? tintColor.withAlphaComponent(0.18) : .clear
         if !isHighlighted {
             backgroundColor = mutedColor
@@ -741,6 +984,22 @@ private final class BookmarkSlotControl: UIControl {
 
     @objc private func pressBegan() {
         layer.removeAllAnimations()
+        holdProgressLayer.removeAllAnimations()
+        holdProgressLayer.strokeEnd = 0
+        holdProgressLayer.opacity = 1
+        let progress = CABasicAnimation(keyPath: "strokeEnd")
+        progress.fromValue = 0
+        progress.toValue = 1
+        progress.duration = 0.5
+        progress.timingFunction = CAMediaTimingFunction(name: .linear)
+        holdProgressLayer.add(progress, forKey: "holdProgress")
+        holdProgressLayer.strokeEnd = 1
+        holdHint.text = "Hold"
+        holdHint.transform = CGAffineTransform(translationX: 0, y: 4)
+        UIView.animate(withDuration: 0.16, delay: 0, options: [.beginFromCurrentState]) {
+            self.holdHint.alpha = 1
+            self.holdHint.transform = .identity
+        }
         UIView.animate(withDuration: 0.5, delay: 0, options: [.curveLinear, .beginFromCurrentState]) {
             self.backgroundColor = self.tintColor.withAlphaComponent(0.42)
             self.transform = CGAffineTransform(scaleX: 0.88, y: 0.88)
@@ -751,7 +1010,8 @@ private final class BookmarkSlotControl: UIControl {
         releaseTension()
     }
 
-    private func releaseTension() {
+    private func releaseTension(recorded: Bool = false) {
+        holdProgressLayer.removeAllAnimations()
         UIView.animate(
             withDuration: 0.26,
             delay: 0,
@@ -762,6 +1022,34 @@ private final class BookmarkSlotControl: UIControl {
             self.backgroundColor = self.mutedColor
             self.transform = .identity
         }
+
+        if recorded {
+            holdHint.text = "Saved"
+            let pulse = CAAnimationGroup()
+            let scale = CABasicAnimation(keyPath: "transform.scale")
+            scale.fromValue = 1
+            scale.toValue = 1.45
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 1
+            fade.toValue = 0
+            pulse.animations = [scale, fade]
+            pulse.duration = 0.28
+            pulse.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            holdProgressLayer.add(pulse, forKey: "recordedPulse")
+            UIView.animate(withDuration: 0.34, delay: 0.32, options: [.beginFromCurrentState]) {
+                self.holdHint.alpha = 0
+            }
+        } else {
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = holdProgressLayer.presentation()?.opacity ?? holdProgressLayer.opacity
+            fade.toValue = 0
+            fade.duration = 0.16
+            holdProgressLayer.add(fade, forKey: "cancelHold")
+            UIView.animate(withDuration: 0.14, delay: 0, options: [.beginFromCurrentState]) {
+                self.holdHint.alpha = 0
+            }
+        }
+        holdProgressLayer.opacity = 0
     }
 
     @objc private func tapped() {
@@ -775,7 +1063,7 @@ private final class BookmarkSlotControl: UIControl {
         guard recognizer.state == .began else { return }
         didStoreDuringTouch = true
         storeBookmark()
-        releaseTension()
+        releaseTension(recorded: true)
     }
 }
 

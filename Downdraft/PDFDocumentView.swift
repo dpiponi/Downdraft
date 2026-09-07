@@ -17,12 +17,13 @@ struct PDFDocumentView: UIViewRepresentable {
     var onLinkNavigation: (Int, Int) -> Void = { _, _ in }
 
     func makeUIView(context: Context) -> PDFView {
-        let view = PagePreservingPDFView()
+        let view = PDFView()
         view.autoScales = true
         view.displayDirection = .vertical
         view.displayMode = .singlePageContinuous
         context.coordinator.startObservingPageChanges(in: view)
         context.coordinator.startObservingReaderTaps(in: view)
+        context.coordinator.startObservingSearchHighlightDismissal(in: view)
         return view
     }
 
@@ -33,16 +34,13 @@ struct PDFDocumentView: UIViewRepresentable {
         context.coordinator.disableDoubleTapZoom(in: pdfView)
         context.coordinator.disablePDFKitSingleTaps(in: pdfView)
         if context.coordinator.loadedDocument !== document {
-            pdfView.document = document
-            if let page = pdfView.document?.page(at: initialPageIndex) {
-                pdfView.go(to: page)
-            } else {
-                pdfView.goToFirstPage(nil)
-            }
-            context.coordinator.loadedDocument = document
-            context.coordinator.lastKnownPageIndex = initialPageIndex
+            context.coordinator.install(
+                document,
+                at: initialPageIndex,
+                in: pdfView
+            )
         }
-        pdfView.highlightedSelections = searchSelections
+        context.coordinator.updateSearchHighlights(searchSelections, in: pdfView)
         context.coordinator.updateSearchSelection(searchSelection, in: pdfView)
         context.coordinator.updateOutlineDestination(outlineDestination, in: pdfView)
         context.coordinator.updateRequestedPage(requestedPageIndex, in: pdfView)
@@ -69,15 +67,38 @@ struct PDFDocumentView: UIViewRepresentable {
         var onCenterTap: () -> Void = { }
         var onLinkNavigation: (Int, Int) -> Void = { _, _ in }
         private var isReaderFocused = false
-        private var appliedReaderFocus: Bool?
         private var isLandscape = false
         private var displaysAsBook = false
         private var displayedSearchSelection: PDFSelection?
+        private var pendingSearchSelection: PDFSelection?
+        private var pendingSearchHighlight: PDFSelection?
         private var displayedOutlineDestination: PDFDestination?
         private var displayedRequestedPageIndex: Int?
         private weak var readerTapGesture: UITapGestureRecognizer?
+        private weak var searchHighlightOverlay: SearchMatchOverlayView?
+        private var observedMotionRecognizers = Set<ObjectIdentifier>()
         private var protectedPageIndex: Int?
+        private var ignoresTransientPageChanges = false
         var lastKnownPageIndex = 0
+
+        func install(_ document: PDFDocument, at pageIndex: Int, in pdfView: PDFView) {
+            // Assigning a PDFDocument always makes PDFKit briefly announce its
+            // first page, even when we immediately go to a saved page.  That
+            // announcement is setup noise, not reader navigation.
+            ignoresTransientPageChanges = true
+            lastKnownPageIndex = pageIndex
+            pdfView.document = document
+            if let page = document.page(at: pageIndex) {
+                pdfView.go(to: page)
+            } else {
+                pdfView.goToFirstPage(nil)
+            }
+            loadedDocument = document
+            DispatchQueue.main.async { [weak self] in
+                self?.ignoresTransientPageChanges = false
+                self?.startObservingSearchHighlightDismissal(in: pdfView)
+            }
+        }
         func startObservingPageChanges(in pdfView: PDFView) {
             NotificationCenter.default.addObserver(
                 self,
@@ -93,6 +114,14 @@ struct PDFDocumentView: UIViewRepresentable {
             tapGesture.delegate = self
             pdfView.addGestureRecognizer(tapGesture)
             readerTapGesture = tapGesture
+        }
+
+        func startObservingSearchHighlightDismissal(in pdfView: PDFView) {
+            let recognizers = scrollViews(in: pdfView).map(\.panGestureRecognizer)
+                + (pdfView.gestureRecognizers ?? []).compactMap { $0 as? UIPinchGestureRecognizer }
+            for recognizer in recognizers where observedMotionRecognizers.insert(ObjectIdentifier(recognizer)).inserted {
+                recognizer.addTarget(self, action: #selector(readerMotionBegan(_:)))
+            }
         }
 
         func disableDoubleTapZoom(in pdfView: PDFView) {
@@ -114,11 +143,15 @@ struct PDFDocumentView: UIViewRepresentable {
             return local + view.subviews.flatMap(tapGestures(in:))
         }
 
+        private func scrollViews(in view: UIView) -> [UIScrollView] {
+            let local = view.subviews.compactMap { $0 as? UIScrollView }
+            return local + view.subviews.flatMap(scrollViews(in:))
+        }
+
         func updateReaderFocus(_ isFocused: Bool, isActive: Bool, in pdfView: PDFView) {
             isReaderFocused = isFocused
-            guard isActive, appliedReaderFocus != isFocused else { return }
-            appliedReaderFocus = isFocused
-            (pdfView as? PagePreservingPDFView)?.preserveScrollPositionOnNextResize()
+            // Reader chrome is now a sibling overlay, so this state must not
+            // cause a PDFKit resize or a compensating navigation.
         }
 
         func updatePageLayout(isLandscape: Bool, displaysAsBook: Bool, in pdfView: PDFView) {
@@ -149,9 +182,34 @@ struct PDFDocumentView: UIViewRepresentable {
         func updateSearchSelection(_ selection: PDFSelection?, in pdfView: PDFView) {
             guard displayedSearchSelection !== selection else { return }
             displayedSearchSelection = selection
-            pdfView.currentSelection = selection
-            if let selection {
-                pdfView.go(to: selection)
+            pendingSearchSelection = selection
+            pendingSearchHighlight = selection
+            if selection == nil {
+                hideSearchHighlight()
+            }
+            guard let selection, let page = selection.pages.first else { return }
+
+            // PDFKit's `go(to: PDFSelection)` can throw an Objective-C
+            // exception while its highlighted-search layers are present.  A
+            // normal page jump is stable and still takes the reader directly
+            // to the page containing the selected match.
+            DispatchQueue.main.async { [weak self, weak pdfView] in
+                guard let self,
+                      let pdfView,
+                      self.pendingSearchSelection === selection else { return }
+                self.pendingSearchSelection = nil
+                pdfView.go(to: page)
+                self.showPendingSearchHighlightIfReady(in: pdfView)
+            }
+        }
+
+        func updateSearchHighlights(_ selections: [PDFSelection], in pdfView: PDFView) {
+            // On iPadOS 26, PDFKit can abort inside its private
+            // `addSearchSelection` layer renderer (including while merely
+            // changing pages).  Keep search navigation, but do not ask that
+            // renderer to draw match highlights.
+            if !(pdfView.highlightedSelections?.isEmpty ?? true) {
+                pdfView.highlightedSelections = []
             }
         }
 
@@ -179,6 +237,14 @@ struct PDFDocumentView: UIViewRepresentable {
                   let document = pdfView.document,
                   let page = pdfView.currentPage else { return }
             let pageIndex = document.index(for: page)
+            hideSearchHighlight()
+
+            // PDFKit reports page zero while it is rebuilding its private
+            // scroll view for an otherwise non-navigational resize.  Keep the
+            // reading position authoritative until that rebuild is complete.
+            if ignoresTransientPageChanges {
+                return
+            }
 
             if let protectedPageIndex,
                pageIndex != protectedPageIndex,
@@ -194,11 +260,14 @@ struct PDFDocumentView: UIViewRepresentable {
             }
             lastKnownPageIndex = pageIndex
             onPageChanged(pageIndex)
+            showPendingSearchHighlightIfReady(in: pdfView)
         }
 
         @objc private func readerTapped(_ recognizer: UITapGestureRecognizer) {
             guard let pdfView = recognizer.view as? PDFView else { return }
             let location = recognizer.location(in: pdfView)
+            pendingSearchHighlight = nil
+            hideSearchHighlight()
             guard let page = pdfView.page(for: location, nearest: false) else {
                 onCenterTap()
                 return
@@ -226,55 +295,79 @@ struct PDFDocumentView: UIViewRepresentable {
             }
         }
 
+        @objc private func readerMotionBegan(_ recognizer: UIGestureRecognizer) {
+            guard recognizer.state == .began || recognizer.state == .changed else { return }
+            pendingSearchHighlight = nil
+            hideSearchHighlight()
+        }
+
+        private func showPendingSearchHighlightIfReady(in pdfView: PDFView) {
+            guard let selection = pendingSearchHighlight,
+                  let targetPage = selection.pages.first,
+                  pdfView.currentPage === targetPage else { return }
+            pendingSearchHighlight = nil
+            // PDFKit installs the page view at the end of its page-change
+            // transaction.  Wait one run-loop turn before converting bounds.
+            DispatchQueue.main.async { [weak self, weak pdfView] in
+                guard let self, let pdfView,
+                      self.displayedSearchSelection === selection else { return }
+                self.showSearchHighlight(for: selection, in: pdfView)
+            }
+        }
+
+        private func showSearchHighlight(for selection: PDFSelection, in pdfView: PDFView) {
+            guard let page = selection.pages.first else { return }
+            let selectionBounds = selection.bounds(for: page)
+            let rect = pdfView.convert(selectionBounds, from: page).insetBy(dx: -3, dy: -2)
+            guard !rect.isNull, !rect.isEmpty else { return }
+
+            hideSearchHighlight()
+            let overlay = SearchMatchOverlayView(frame: pdfView.bounds)
+            overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            overlay.show(rect: rect)
+            pdfView.addSubview(overlay)
+            searchHighlightOverlay = overlay
+        }
+
+        private func hideSearchHighlight() {
+            searchHighlightOverlay?.removeFromSuperview()
+            searchHighlightOverlay = nil
+        }
+
         deinit {
             NotificationCenter.default.removeObserver(self)
         }
+
+    }
+}
+
+private final class SearchMatchOverlayView: UIView {
+    private let outlineLayer = CAShapeLayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        backgroundColor = .clear
+        outlineLayer.fillColor = UIColor.systemYellow.withAlphaComponent(0.28).cgColor
+        outlineLayer.strokeColor = UIColor.systemYellow.withAlphaComponent(0.95).cgColor
+        outlineLayer.lineWidth = 2
+        layer.addSublayer(outlineLayer)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:)")
+    }
+
+    func show(rect: CGRect) {
+        outlineLayer.path = UIBezierPath(
+            roundedRect: rect,
+            cornerRadius: 4
+        ).cgPath
     }
 }
 
 extension PDFDocumentView.Coordinator: UIGestureRecognizerDelegate {
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         gestureRecognizer is UITapGestureRecognizer
-    }
-}
-
-private final class PagePreservingPDFView: PDFView {
-    private var previousBoundsSize = CGSize.zero
-    private var shouldPreserveScrollPosition = false
-
-    func preserveScrollPositionOnNextResize() {
-        shouldPreserveScrollPosition = true
-    }
-
-    override func layoutSubviews() {
-        let sizeChanged = previousBoundsSize != .zero && bounds.size != previousBoundsSize
-        let offsets = shouldPreserveScrollPosition && sizeChanged
-            ? scrollViews(in: self).map { ($0, $0.contentOffset) }
-            : []
-        super.layoutSubviews()
-        disableScrollToTop(in: self)
-        previousBoundsSize = bounds.size
-
-        guard shouldPreserveScrollPosition, sizeChanged else { return }
-        shouldPreserveScrollPosition = false
-        DispatchQueue.main.async {
-            for (scrollView, offset) in offsets {
-                scrollView.setContentOffset(offset, animated: false)
-            }
-        }
-    }
-
-    private func disableScrollToTop(in view: UIView) {
-        for subview in view.subviews {
-            if let scrollView = subview as? UIScrollView {
-                scrollView.scrollsToTop = false
-            }
-            disableScrollToTop(in: subview)
-        }
-    }
-
-    private func scrollViews(in view: UIView) -> [UIScrollView] {
-        let localScrollViews = view.subviews.compactMap { $0 as? UIScrollView }
-        return localScrollViews + view.subviews.flatMap(scrollViews(in:))
     }
 }
