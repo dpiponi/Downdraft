@@ -52,7 +52,7 @@ struct ContentView: View {
                         VStack(spacing: 0) {
                             // Keep every PDFView in the hierarchy, so switching tabs
                             // retains its zoom level and reading position.
-                            ZStack {
+                            ZStack(alignment: .bottom) {
                                 ForEach(documents) { document in
                                     reader(for: document)
                                 }
