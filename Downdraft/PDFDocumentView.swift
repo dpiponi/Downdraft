@@ -31,6 +31,7 @@ struct PDFDocumentView: UIViewRepresentable {
         context.coordinator.onCenterTap = onCenterTap
         context.coordinator.onLinkNavigation = onLinkNavigation
         context.coordinator.disableDoubleTapZoom(in: pdfView)
+        context.coordinator.disablePDFKitSingleTaps(in: pdfView)
         if context.coordinator.loadedDocument !== document {
             pdfView.document = document
             if let page = pdfView.document?.page(at: initialPageIndex) {
@@ -74,6 +75,7 @@ struct PDFDocumentView: UIViewRepresentable {
         private var displayedSearchSelection: PDFSelection?
         private var displayedOutlineDestination: PDFDestination?
         private var displayedRequestedPageIndex: Int?
+        private weak var readerTapGesture: UITapGestureRecognizer?
         var lastKnownPageIndex = 0
         func startObservingPageChanges(in pdfView: PDFView) {
             NotificationCenter.default.addObserver(
@@ -85,15 +87,23 @@ struct PDFDocumentView: UIViewRepresentable {
         }
 
         func startObservingReaderTaps(in pdfView: PDFView) {
-            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(readerTapped))
+            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(readerTapped(_:)))
             tapGesture.cancelsTouchesInView = true
             tapGesture.delegate = self
             pdfView.addGestureRecognizer(tapGesture)
+            readerTapGesture = tapGesture
         }
 
         func disableDoubleTapZoom(in pdfView: PDFView) {
             for recognizer in tapGestures(in: pdfView)
             where recognizer.numberOfTapsRequired > 1 {
+                recognizer.isEnabled = false
+            }
+        }
+
+        func disablePDFKitSingleTaps(in pdfView: PDFView) {
+            for recognizer in tapGestures(in: pdfView)
+            where recognizer !== readerTapGesture && recognizer.numberOfTapsRequired == 1 {
                 recognizer.isEnabled = false
             }
         }
@@ -172,8 +182,28 @@ struct PDFDocumentView: UIViewRepresentable {
             onPageChanged(pageIndex)
         }
 
-        @objc private func readerTapped() {
-            onCenterTap()
+        @objc private func readerTapped(_ recognizer: UITapGestureRecognizer) {
+            guard let pdfView = recognizer.view as? PDFView else { return }
+            let location = recognizer.location(in: pdfView)
+            guard let page = pdfView.page(for: location, nearest: false) else {
+                onCenterTap()
+                return
+            }
+            let pointOnPage = pdfView.convert(location, to: page)
+            guard let annotation = page.annotation(at: pointOnPage),
+                  annotation.type?.lowercased() == "link" else {
+                onCenterTap()
+                return
+            }
+
+            if let destination = annotation.destination,
+               let destinationPage = destination.page,
+               let document = pdfView.document {
+                onLinkNavigation(document.index(for: page), document.index(for: destinationPage))
+                pdfView.go(to: destination)
+            } else if let url = annotation.url {
+                UIApplication.shared.open(url)
+            }
         }
 
         deinit {
@@ -184,24 +214,7 @@ struct PDFDocumentView: UIViewRepresentable {
 
 extension PDFDocumentView.Coordinator: UIGestureRecognizerDelegate {
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        guard let tapGesture = gestureRecognizer as? UITapGestureRecognizer,
-              let pdfView = tapGesture.view as? PDFView else { return false }
-
-        // Let PDFKit handle an annotation link normally; every other
-        // stationary single tap is a reader-chrome toggle.
-        let location = tapGesture.location(in: pdfView)
-        guard let page = pdfView.page(for: location, nearest: false) else { return true }
-        let pointOnPage = pdfView.convert(location, to: page)
-        guard let annotation = page.annotation(at: pointOnPage),
-              annotation.type?.lowercased() == "link" else {
-            return true
-        }
-
-        if let destinationPage = annotation.destination?.page,
-           let document = pdfView.document {
-            onLinkNavigation(document.index(for: page), document.index(for: destinationPage))
-        }
-        return false
+        gestureRecognizer is UITapGestureRecognizer
     }
 }
 
