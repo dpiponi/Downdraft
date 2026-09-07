@@ -76,6 +76,7 @@ struct PDFDocumentView: UIViewRepresentable {
         private var displayedOutlineDestination: PDFDestination?
         private var displayedRequestedPageIndex: Int?
         private weak var readerTapGesture: UITapGestureRecognizer?
+        private var protectedPageIndex: Int?
         var lastKnownPageIndex = 0
         func startObservingPageChanges(in pdfView: PDFView) {
             NotificationCenter.default.addObserver(
@@ -178,6 +179,19 @@ struct PDFDocumentView: UIViewRepresentable {
                   let document = pdfView.document,
                   let page = pdfView.currentPage else { return }
             let pageIndex = document.index(for: page)
+
+            if let protectedPageIndex,
+               pageIndex != protectedPageIndex,
+               let protectedPage = document.page(at: protectedPageIndex) {
+                // A chrome toggle must not become a navigation action. PDFKit
+                // occasionally resets its rebuilt scroll view to page zero;
+                // reject that synthetic page-change before publishing it.
+                pdfView.go(to: PDFDestination(
+                    page: protectedPage,
+                    at: protectedPage.bounds(for: .mediaBox).origin
+                ))
+                return
+            }
             lastKnownPageIndex = pageIndex
             onPageChanged(pageIndex)
         }
@@ -192,6 +206,12 @@ struct PDFDocumentView: UIViewRepresentable {
             let pointOnPage = pdfView.convert(location, to: page)
             guard let annotation = page.annotation(at: pointOnPage),
                   annotation.type?.lowercased() == "link" else {
+                if let document = pdfView.document {
+                    protectedPageIndex = document.index(for: page)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                        self?.protectedPageIndex = nil
+                    }
+                }
                 onCenterTap()
                 return
             }
