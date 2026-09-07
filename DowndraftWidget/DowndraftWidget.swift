@@ -53,7 +53,7 @@ private struct RecentDocumentsWidgetView: View {
     private var displayedDocuments: [RecentDocument] {
         let count = switch family {
         case .systemSmall: 1
-        case .systemMedium: 2
+        case .systemMedium: UIDevice.current.userInterfaceIdiom == .pad ? 4 : 2
         default: 4
         }
         return Array(documents.prefix(count))
