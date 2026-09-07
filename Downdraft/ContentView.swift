@@ -353,6 +353,9 @@ struct ContentView: View {
             .opacity(isSelected ? 1 : 0)
             .allowsHitTesting(isSelected)
             .accessibilityHidden(!isSelected)
+            // The system bars are visual overlays for the reader.  Keep the
+            // UIKit PDF view out of their safe-area relayout path.
+            .ignoresSafeArea()
         }
     }
 
