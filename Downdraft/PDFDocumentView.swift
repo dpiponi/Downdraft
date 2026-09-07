@@ -107,6 +107,7 @@ struct PDFDocumentView: UIViewRepresentable {
             isReaderFocused = isFocused
             guard isActive, appliedReaderFocus != isFocused else { return }
             appliedReaderFocus = isFocused
+            (pdfView as? PagePreservingPDFView)?.preserveScrollPositionOnNextResize()
         }
 
         func updatePageLayout(isLandscape: Bool, displaysAsBook: Bool, in pdfView: PDFView) {
@@ -205,9 +206,29 @@ extension PDFDocumentView.Coordinator: UIGestureRecognizerDelegate {
 }
 
 private final class PagePreservingPDFView: PDFView {
+    private var previousBoundsSize = CGSize.zero
+    private var shouldPreserveScrollPosition = false
+
+    func preserveScrollPositionOnNextResize() {
+        shouldPreserveScrollPosition = true
+    }
+
     override func layoutSubviews() {
+        let sizeChanged = previousBoundsSize != .zero && bounds.size != previousBoundsSize
+        let offsets = shouldPreserveScrollPosition && sizeChanged
+            ? scrollViews(in: self).map { ($0, $0.contentOffset) }
+            : []
         super.layoutSubviews()
         disableScrollToTop(in: self)
+        previousBoundsSize = bounds.size
+
+        guard shouldPreserveScrollPosition, sizeChanged else { return }
+        shouldPreserveScrollPosition = false
+        DispatchQueue.main.async {
+            for (scrollView, offset) in offsets {
+                scrollView.setContentOffset(offset, animated: false)
+            }
+        }
     }
 
     private func disableScrollToTop(in view: UIView) {
@@ -217,5 +238,10 @@ private final class PagePreservingPDFView: PDFView {
             }
             disableScrollToTop(in: subview)
         }
+    }
+
+    private func scrollViews(in view: UIView) -> [UIScrollView] {
+        let localScrollViews = view.subviews.compactMap { $0 as? UIScrollView }
+        return localScrollViews + view.subviews.flatMap(scrollViews(in:))
     }
 }
