@@ -409,9 +409,7 @@ struct ContentView: View {
                 size: 40,
                 goToBookmark: { },
                 storeBookmark: addBookmark,
-                removeBookmark: nil,
-                holdHint: "Add",
-                savedHint: "Added"
+                removeBookmark: nil
             )
             .frame(width: 40, height: 40)
         }
@@ -840,8 +838,6 @@ private struct BookmarkSlotButton: UIViewRepresentable {
     let goToBookmark: () -> Void
     let storeBookmark: () -> Void
     let removeBookmark: (() -> Void)?
-    var holdHint = "Hold"
-    var savedHint = "Saved"
 
     func makeUIView(context: Context) -> BookmarkSlotControl {
         BookmarkSlotControl(size: size)
@@ -854,24 +850,19 @@ private struct BookmarkSlotButton: UIViewRepresentable {
             isSet: isSet,
             goToBookmark: goToBookmark,
             storeBookmark: storeBookmark,
-            removeBookmark: removeBookmark,
-            holdHint: holdHint,
-            savedHint: savedHint
+            removeBookmark: removeBookmark
         )
     }
 }
 
 private final class BookmarkSlotControl: UIControl {
     private let label = UILabel()
-    private let holdHint = UILabel()
     private let holdProgressLayer = CAShapeLayer()
     private var goToBookmark: () -> Void = { }
     private var storeBookmark: () -> Void = { }
     private var removeBookmark: (() -> Void)?
     private var didStoreDuringTouch = false
     private var didRemoveDuringTouch = false
-    private var holdHintText = "Hold"
-    private var savedHintText = "Saved"
     private var mutedColor = UIColor.clear
     private let size: CGFloat
 
@@ -893,15 +884,6 @@ private final class BookmarkSlotControl: UIControl {
         holdProgressLayer.strokeEnd = 0
         holdProgressLayer.opacity = 0
         layer.addSublayer(holdProgressLayer)
-        holdHint.textAlignment = .center
-        holdHint.font = .systemFont(ofSize: 12, weight: .semibold)
-        holdHint.textColor = .white
-        holdHint.backgroundColor = .systemBlue
-        holdHint.layer.cornerRadius = 10
-        holdHint.clipsToBounds = true
-        holdHint.alpha = 0
-        holdHint.isUserInteractionEnabled = false
-        addSubview(holdHint)
         addSubview(label)
         addTarget(self, action: #selector(pressBegan), for: .touchDown)
         addTarget(self, action: #selector(tapped), for: .touchUpInside)
@@ -927,12 +909,6 @@ private final class BookmarkSlotControl: UIControl {
     override func layoutSubviews() {
         super.layoutSubviews()
         label.frame = bounds
-        holdHint.frame = CGRect(
-            x: (bounds.width - 58) / 2,
-            y: bounds.height + 8,
-            width: 58,
-            height: 20
-        )
         layer.cornerRadius = bounds.height / 2
         holdProgressLayer.frame = bounds
         holdProgressLayer.path = UIBezierPath(
@@ -952,15 +928,11 @@ private final class BookmarkSlotControl: UIControl {
         isSet: Bool,
         goToBookmark: @escaping () -> Void,
         storeBookmark: @escaping () -> Void,
-        removeBookmark: (() -> Void)?,
-        holdHint: String,
-        savedHint: String
+        removeBookmark: (() -> Void)?
     ) {
         self.goToBookmark = goToBookmark
         self.storeBookmark = storeBookmark
         self.removeBookmark = removeBookmark
-        holdHintText = holdHint
-        savedHintText = savedHint
         label.text = title
         label.font = .monospacedDigitSystemFont(ofSize: 17, weight: isSet ? .semibold : .regular)
         holdProgressLayer.strokeColor = tintColor.cgColor
@@ -986,12 +958,6 @@ private final class BookmarkSlotControl: UIControl {
         progress.timingFunction = CAMediaTimingFunction(name: .linear)
         holdProgressLayer.add(progress, forKey: "holdProgress")
         holdProgressLayer.strokeEnd = 1
-        holdHint.text = holdHintText
-        holdHint.transform = CGAffineTransform(translationX: 0, y: 4)
-        UIView.animate(withDuration: 0.16, delay: 0, options: [.beginFromCurrentState]) {
-            self.holdHint.alpha = 1
-            self.holdHint.transform = .identity
-        }
         UIView.animate(withDuration: 0.5, delay: 0, options: [.curveLinear, .beginFromCurrentState]) {
             self.backgroundColor = self.tintColor.withAlphaComponent(0.52)
             self.transform = CGAffineTransform(scaleX: 1.8, y: 1.8)
@@ -1016,7 +982,6 @@ private final class BookmarkSlotControl: UIControl {
         }
 
         if recorded {
-            holdHint.text = savedHintText
             let pulse = CAAnimationGroup()
             let scale = CABasicAnimation(keyPath: "transform.scale")
             scale.fromValue = 1
@@ -1028,18 +993,12 @@ private final class BookmarkSlotControl: UIControl {
             pulse.duration = 0.28
             pulse.timingFunction = CAMediaTimingFunction(name: .easeOut)
             holdProgressLayer.add(pulse, forKey: "recordedPulse")
-            UIView.animate(withDuration: 0.34, delay: 0.32, options: [.beginFromCurrentState]) {
-                self.holdHint.alpha = 0
-            }
         } else {
             let fade = CABasicAnimation(keyPath: "opacity")
             fade.fromValue = holdProgressLayer.presentation()?.opacity ?? holdProgressLayer.opacity
             fade.toValue = 0
             fade.duration = 0.16
             holdProgressLayer.add(fade, forKey: "cancelHold")
-            UIView.animate(withDuration: 0.14, delay: 0, options: [.beginFromCurrentState]) {
-                self.holdHint.alpha = 0
-            }
         }
         holdProgressLayer.opacity = 0
     }
