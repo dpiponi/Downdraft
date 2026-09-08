@@ -397,8 +397,6 @@ struct ContentView: View {
         .background(.thinMaterial, in: Capsule())
         .tint(.primary)
         .font(.title3.weight(.medium))
-        .contentShape(Capsule())
-        .onTapGesture { }
     }
 
     private var documentMenu: some View {
