@@ -276,6 +276,21 @@ struct ContentView: View {
             }
             .transition(.move(edge: .top).combined(with: .opacity))
 
+            if !isPhone {
+                GeometryReader { geometry in
+                    VStack(spacing: 0) {
+                        Spacer(minLength: geometry.size.height * 0.57)
+                        HStack {
+                            Spacer(minLength: 0)
+                            bookmarkControls
+                        }
+                        .padding(.trailing, 18)
+                        Spacer(minLength: 0)
+                    }
+                }
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
                 VStack(spacing: 8) {
@@ -303,7 +318,11 @@ struct ContentView: View {
         HStack(spacing: 12) {
             primaryReaderControls
             if !isPhone {
-                bookmarkAndHistoryControls
+                historyControls
+                    .padding(.horizontal, 16)
+                    .frame(height: 58)
+                    .background(.thinMaterial, in: Capsule())
+                    .tint(.primary)
             }
         }
     }
@@ -361,8 +380,8 @@ struct ContentView: View {
         .font(.title3.weight(.medium))
     }
 
-    private var bookmarkAndHistoryControls: some View {
-        HStack(spacing: 10) {
+    private var bookmarkControls: some View {
+        VStack(spacing: 10) {
             ForEach(0..<3, id: \.self) { index in
                 BookmarkSlotButton(
                     number: index + 1,
@@ -373,13 +392,13 @@ struct ContentView: View {
                 )
                 .frame(width: 40, height: 40)
             }
-            historyControls
         }
-        .padding(.horizontal, 16)
-        .frame(height: 58)
+        .padding(12)
         .background(.thinMaterial, in: Capsule())
         .tint(.primary)
         .font(.title3.weight(.medium))
+        .contentShape(Capsule())
+        .onTapGesture { }
     }
 
     private var documentMenu: some View {
