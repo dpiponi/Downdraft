@@ -993,8 +993,8 @@ private final class BookmarkSlotControl: UIControl {
             self.holdHint.transform = .identity
         }
         UIView.animate(withDuration: 0.5, delay: 0, options: [.curveLinear, .beginFromCurrentState]) {
-            self.backgroundColor = self.tintColor.withAlphaComponent(0.42)
-            self.transform = CGAffineTransform(scaleX: 0.88, y: 0.88)
+            self.backgroundColor = self.tintColor.withAlphaComponent(0.52)
+            self.transform = CGAffineTransform(scaleX: 1.18, y: 1.18)
         }
     }
 
