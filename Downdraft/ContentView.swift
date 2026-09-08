@@ -165,6 +165,12 @@ struct ContentView: View {
         )) { _ in
             deviceOrientation = UIDevice.current.orientation
         }
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: NSUbiquitousKeyValueStore.default
+        )) { _ in
+            refreshSharedReadingState()
+        }
         .onOpenURL { url in
             if url.isFileURL {
                 open(url)
@@ -500,8 +506,6 @@ struct ContentView: View {
             errorMessage = "Downdraft couldn’t save permission to reopen this PDF."
             return
         }
-        document.bookmarkPageIndices = BookmarkStore.bookmarks(for: document)
-            ?? document.bookmarkPageIndices
         documents.append(document)
         selectDocument(document.id)
         saveDocuments()
@@ -525,16 +529,11 @@ struct ContentView: View {
             errorMessage = "The PDF is no longer available in Files."
             return
         }
+        restoreSharedReadingState(for: document)
         selectedDocumentID = id
         treatsFirstPageAsCover = document.displaysAsBook
         scrubbedPageIndex = document.lastPageIndex
         requestedPageIndex = nil
-        let storedBookmarks = BookmarkStore.bookmarks(for: document)
-        if let storedBookmarks {
-            document.bookmarkPageIndices = storedBookmarks
-        } else {
-            BookmarkStore.save(document.bookmarkPageIndices, for: document)
-        }
         bookmarkPageIndices = document.bookmarkPageIndices
         RecentDocumentStore.record(
             id: document.id,
@@ -585,7 +584,15 @@ struct ContentView: View {
         guard let document = selectedDocument else { return }
         document.bookmarkPageIndices[index] = document.lastPageIndex
         bookmarkPageIndices[index] = document.lastPageIndex
-        BookmarkStore.save(document.bookmarkPageIndices, for: document)
+        if let identity = document.readingStateIdentity {
+            ReadingStateStore.saveBookmark(
+                document.lastPageIndex,
+                at: index,
+                for: identity,
+                fallbackPageIndex: document.lastPageIndex,
+                fallbackBookmarks: document.bookmarkPageIndices
+            )
+        }
         saveDocuments()
     }
 
@@ -607,6 +614,13 @@ struct ContentView: View {
         guard let document = documents.first(where: { $0.id == id }),
               document.lastPageIndex != pageIndex else { return }
         document.lastPageIndex = pageIndex
+        if let identity = document.readingStateIdentity {
+            ReadingStateStore.savePage(
+                pageIndex,
+                for: identity,
+                fallbackBookmarks: document.bookmarkPageIndices
+            )
+        }
         if id == selectedDocumentID {
             scrubbedPageIndex = pageIndex
             requestedPageIndex = nil
@@ -653,6 +667,37 @@ struct ContentView: View {
 
     private func saveDocuments() {
         OpenDocument.save(documents)
+    }
+
+    private func restoreSharedReadingState(for document: OpenDocument) {
+        guard let identity = document.readingStateIdentity else { return }
+        let state = ReadingStateStore.state(
+            for: identity,
+            fallbackPageIndex: document.lastPageIndex,
+            fallbackBookmarks: document.bookmarkPageIndices
+        )
+        document.lastPageIndex = state.page.index
+        document.bookmarkPageIndices = state.bookmarks.map(\.pageIndex)
+    }
+
+    private func refreshSharedReadingState() {
+        guard let document = selectedDocument,
+              let identity = document.readingStateIdentity else { return }
+        let previousPage = document.lastPageIndex
+        let state = ReadingStateStore.state(
+            for: identity,
+            fallbackPageIndex: previousPage,
+            fallbackBookmarks: document.bookmarkPageIndices
+        )
+        document.lastPageIndex = state.page.index
+        document.bookmarkPageIndices = state.bookmarks.map(\.pageIndex)
+        bookmarkPageIndices = document.bookmarkPageIndices
+        if state.page.index != previousPage {
+            scrubbedPageIndex = state.page.index
+            scrubberRevision += 1
+            requestedPageIndex = state.page.index
+        }
+        saveDocuments()
     }
 }
 
@@ -1031,6 +1076,7 @@ private final class OpenDocument: Identifiable {
     let id = UUID()
     private(set) var url: URL?
     private(set) var pdfDocument: PDFDocument?
+    private(set) var readingStateIdentity: String?
     let bookmarkData: Data
     let displayName: String
     let originalURLString: String
@@ -1111,6 +1157,7 @@ private final class OpenDocument: Identifiable {
             if pdfDocument == nil {
                 pdfDocument = PDFDocument(url: url)
             }
+            establishReadingStateIdentity()
             return pdfDocument != nil
         }
         var isStale = false
@@ -1126,7 +1173,13 @@ private final class OpenDocument: Identifiable {
         url = resolvedURL
         isAccessingFile = isAccessingSecurityScope
         pdfDocument = PDFDocument(url: resolvedURL)
+        establishReadingStateIdentity()
         return pdfDocument != nil
+    }
+
+    private func establishReadingStateIdentity() {
+        guard readingStateIdentity == nil, let url, let pdfDocument else { return }
+        readingStateIdentity = ReadingStateStore.identity(for: url, document: pdfDocument)
     }
 
     func recordNavigation(from source: Int, to destination: Int) {
@@ -1202,47 +1255,6 @@ private final class OpenDocument: Identifiable {
                 isAccessingFile: false
             )
         }
-    }
-}
-
-private enum BookmarkStore {
-    private static let savedBookmarksKey = "quickBookmarksByDocument"
-
-    static func bookmarks(for document: OpenDocument) -> [Int?]? {
-        guard let key = key(for: document),
-              let data = UserDefaults.standard.data(forKey: savedBookmarksKey),
-              let storedBookmarks = try? JSONDecoder().decode([String: [Int?]].self, from: data),
-              let bookmarks = storedBookmarks[key] else {
-            return nil
-        }
-        return normalized(bookmarks)
-    }
-
-    static func save(_ bookmarks: [Int?], for document: OpenDocument) {
-        guard let key = key(for: document) else { return }
-        var storedBookmarks: [String: [Int?]] = [:]
-        if let data = UserDefaults.standard.data(forKey: savedBookmarksKey),
-           let decoded = try? JSONDecoder().decode([String: [Int?]].self, from: data) {
-            storedBookmarks = decoded
-        }
-        storedBookmarks[key] = normalized(bookmarks)
-        guard let data = try? JSONEncoder().encode(storedBookmarks) else { return }
-        UserDefaults.standard.set(data, forKey: savedBookmarksKey)
-    }
-
-    private static func key(for document: OpenDocument) -> String? {
-        if !document.originalURLString.isEmpty {
-            return document.originalURLString
-        }
-        return document.url?.standardizedFileURL.absoluteString
-    }
-
-    private static func normalized(_ bookmarks: [Int?]) -> [Int?] {
-        var normalized = Array(bookmarks.prefix(3))
-        while normalized.count < 3 {
-            normalized.append(nil)
-        }
-        return normalized
     }
 }
 

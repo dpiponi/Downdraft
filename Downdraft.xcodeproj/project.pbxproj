@@ -97,7 +97,7 @@
 				TargetAttributes = {
 				A00000000000000000000005 = {
 					CreatedOnToolsVersion = 26.0;
-					SystemCapabilities = {com.apple.ApplicationGroups.iOS = {enabled = 1; }; };
+					SystemCapabilities = {com.apple.ApplicationGroups.iOS = {enabled = 1; }; com.apple.iCloud = {enabled = 1; }; };
 				};
 				B00000000000000000000006 = {CreatedOnToolsVersion = 26.0; SystemCapabilities = {com.apple.ApplicationGroups.iOS = {enabled = 1; }; };};
 			};
