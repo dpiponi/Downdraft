@@ -26,7 +26,6 @@ struct ContentView: View {
     @State private var scrubberRevision = 0
     @State private var deviceOrientation = UIDevice.current.orientation
     @State private var isSearchPresented = false
-    @State private var isShowingBookmarks = false
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -115,29 +114,6 @@ struct ContentView: View {
             if let document = selectedDocument, let pdfDocument = document.pdfDocument {
                 PDFMetadataView(document: pdfDocument, filename: document.displayName)
             }
-        }
-        .sheet(isPresented: $isShowingBookmarks) {
-            VStack(spacing: 14) {
-                Text("Bookmarks")
-                    .font(.headline)
-                HStack(spacing: 24) {
-                    ForEach(0..<3, id: \.self) { index in
-                        BookmarkSlotButton(
-                            number: index + 1,
-                            isSet: bookmarkPageIndices[index] != nil,
-                            size: 48,
-                            goToBookmark: {
-                                goToBookmark(at: index)
-                                isShowingBookmarks = false
-                            },
-                            storeBookmark: { storeBookmark(at: index) }
-                        )
-                    }
-                }
-            }
-            .padding()
-            .presentationDetents([.height(140)])
-            .presentationDragIndicator(.visible)
         }
         .fileImporter(
             isPresented: $isShowingFilePicker,
@@ -276,20 +252,18 @@ struct ContentView: View {
             }
             .transition(.move(edge: .top).combined(with: .opacity))
 
-            if !isPhone {
-                GeometryReader { geometry in
-                    VStack(spacing: 0) {
-                        Spacer(minLength: geometry.size.height * 0.57)
-                        HStack {
-                            Spacer(minLength: 0)
-                            bookmarkControls
-                        }
-                        .padding(.trailing, 18)
+            GeometryReader { geometry in
+                VStack(spacing: 0) {
+                    Spacer(minLength: geometry.size.height * 0.57)
+                    HStack {
                         Spacer(minLength: 0)
+                        bookmarkControls
                     }
+                    .padding(.trailing, isPhone ? 12 : 18)
+                    Spacer(minLength: 0)
                 }
-                .transition(.move(edge: .trailing).combined(with: .opacity))
             }
+            .transition(.move(edge: .trailing).combined(with: .opacity))
 
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
@@ -361,10 +335,6 @@ struct ContentView: View {
                     Image(systemName: "magnifyingglass")
                 }
                 .accessibilityLabel("Search")
-                Button { isShowingBookmarks = true } label: {
-                    Image(systemName: "bookmark")
-                }
-                .accessibilityLabel("Bookmarks")
                 Menu("More", systemImage: "ellipsis.circle") {
                     if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
                         Button("Contents", systemImage: "list.bullet") { isShowingContents = true }
