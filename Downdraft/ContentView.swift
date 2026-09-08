@@ -19,7 +19,7 @@ struct ContentView: View {
     @State private var treatsFirstPageAsCover = true
     @State private var scrubbedPageIndex = 0
     @State private var requestedPageIndex: Int?
-    @State private var bookmarkPageIndices: [Int?] = [nil, nil, nil]
+    @State private var bookmarkPageIndices: [Int?] = []
     // Forces SwiftUI to refresh history-button availability after mutating a
     // reference-type document's navigation history.
     @State private var navigationRevision = 0
@@ -38,6 +38,26 @@ struct ContentView: View {
 
     private var isPhone: Bool {
         UIDevice.current.userInterfaceIdiom == .phone
+    }
+
+    private var visibleBookmarks: [(index: Int, pageIndex: Int)] {
+        bookmarkPageIndices.enumerated().compactMap { index, pageIndex in
+            pageIndex.map { (index, $0) }
+        }
+    }
+
+    private var maximumBookmarkRailButtons: Int {
+        if isLandscapeInterface {
+            return isPhone ? 4 : 4
+        }
+        return isPhone ? 5 : 7
+    }
+
+    /// Includes space for the add control, and for the overflow control when
+    /// necessary, so the rail cannot collide with the bottom scrubber.
+    private var visibleBookmarkLimit: Int {
+        let directCapacity = maximumBookmarkRailButtons - 1
+        return visibleBookmarks.count > directCapacity ? directCapacity - 1 : directCapacity
     }
 
     var body: some View {
@@ -352,16 +372,48 @@ struct ContentView: View {
 
     private var bookmarkControls: some View {
         VStack(spacing: 10) {
-            ForEach(0..<3, id: \.self) { index in
+            ForEach(Array(visibleBookmarks.prefix(visibleBookmarkLimit)), id: \.index) { bookmark in
                 BookmarkSlotButton(
-                    number: index + 1,
-                    isSet: bookmarkPageIndices[index] != nil,
+                    title: "\(visibleBookmarkNumber(for: bookmark.index))",
+                    accessibilityLabel: "Bookmark \(visibleBookmarkNumber(for: bookmark.index))",
+                    isSet: true,
                     size: 40,
-                    goToBookmark: { goToBookmark(at: index) },
-                    storeBookmark: { storeBookmark(at: index) }
+                    goToBookmark: { goToBookmark(at: bookmark.index) },
+                    storeBookmark: { storeBookmark(at: bookmark.index) },
+                    removeBookmark: { removeBookmark(at: bookmark.index) }
                 )
                 .frame(width: 40, height: 40)
             }
+            if visibleBookmarks.count > visibleBookmarkLimit {
+                Menu {
+                    ForEach(Array(visibleBookmarks.dropFirst(visibleBookmarkLimit)), id: \.index) { bookmark in
+                        Menu("Bookmark \(visibleBookmarkNumber(for: bookmark.index))") {
+                            Button("Go to Page \(bookmark.pageIndex + 1)") {
+                                goToBookmark(at: bookmark.index)
+                            }
+                            Button("Remove Bookmark", role: .destructive) {
+                                removeBookmark(at: bookmark.index)
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .frame(width: 40, height: 40)
+                }
+                .accessibilityLabel("More bookmarks")
+            }
+            BookmarkSlotButton(
+                title: "+",
+                accessibilityLabel: "Add Bookmark",
+                isSet: false,
+                size: 40,
+                goToBookmark: { },
+                storeBookmark: addBookmark,
+                removeBookmark: nil,
+                holdHint: "Add",
+                savedHint: "Added"
+            )
+            .frame(width: 40, height: 40)
         }
         .padding(12)
         .background(.thinMaterial, in: Capsule())
@@ -583,6 +635,44 @@ struct ContentView: View {
         saveDocuments()
     }
 
+    private func addBookmark() {
+        guard let document = selectedDocument else { return }
+        document.bookmarkPageIndices.append(document.lastPageIndex)
+        bookmarkPageIndices = document.bookmarkPageIndices
+        let index = document.bookmarkPageIndices.index(before: document.bookmarkPageIndices.endIndex)
+        if let identity = document.readingStateIdentity {
+            ReadingStateStore.saveBookmark(
+                document.lastPageIndex,
+                at: index,
+                for: identity,
+                fallbackPageIndex: document.lastPageIndex,
+                fallbackBookmarks: document.bookmarkPageIndices
+            )
+        }
+        saveDocuments()
+    }
+
+    private func removeBookmark(at index: Int) {
+        guard let document = selectedDocument,
+              document.bookmarkPageIndices.indices.contains(index) else { return }
+        document.bookmarkPageIndices[index] = nil
+        bookmarkPageIndices = document.bookmarkPageIndices
+        if let identity = document.readingStateIdentity {
+            ReadingStateStore.saveBookmark(
+                nil,
+                at: index,
+                for: identity,
+                fallbackPageIndex: document.lastPageIndex,
+                fallbackBookmarks: document.bookmarkPageIndices
+            )
+        }
+        saveDocuments()
+    }
+
+    private func visibleBookmarkNumber(for index: Int) -> Int {
+        (bookmarkPageIndices[..<index].compactMap { $0 }.count) + 1
+    }
+
     private func openBookmark(_ bookmarkData: Data) {
         var isStale = false
         guard let url = try? URL(
@@ -743,11 +833,15 @@ private struct PageScrubber: View {
 }
 
 private struct BookmarkSlotButton: UIViewRepresentable {
-    let number: Int
+    let title: String
+    let accessibilityLabel: String
     let isSet: Bool
     var size: CGFloat = 36
     let goToBookmark: () -> Void
     let storeBookmark: () -> Void
+    let removeBookmark: (() -> Void)?
+    var holdHint = "Hold"
+    var savedHint = "Saved"
 
     func makeUIView(context: Context) -> BookmarkSlotControl {
         BookmarkSlotControl(size: size)
@@ -755,10 +849,14 @@ private struct BookmarkSlotButton: UIViewRepresentable {
 
     func updateUIView(_ control: BookmarkSlotControl, context: Context) {
         control.configure(
-            number: number,
+            title: title,
+            accessibilityLabel: accessibilityLabel,
             isSet: isSet,
             goToBookmark: goToBookmark,
-            storeBookmark: storeBookmark
+            storeBookmark: storeBookmark,
+            removeBookmark: removeBookmark,
+            holdHint: holdHint,
+            savedHint: savedHint
         )
     }
 }
@@ -769,7 +867,11 @@ private final class BookmarkSlotControl: UIControl {
     private let holdProgressLayer = CAShapeLayer()
     private var goToBookmark: () -> Void = { }
     private var storeBookmark: () -> Void = { }
+    private var removeBookmark: (() -> Void)?
     private var didStoreDuringTouch = false
+    private var didRemoveDuringTouch = false
+    private var holdHintText = "Hold"
+    private var savedHintText = "Saved"
     private var mutedColor = UIColor.clear
     private let size: CGFloat
 
@@ -810,6 +912,10 @@ private final class BookmarkSlotControl: UIControl {
         longPress.cancelsTouchesInView = false
         addGestureRecognizer(longPress)
 
+        let removePan = UIPanGestureRecognizer(target: self, action: #selector(panned(_:)))
+        removePan.cancelsTouchesInView = true
+        addGestureRecognizer(removePan)
+
         isAccessibilityElement = true
         accessibilityTraits = .button
     }
@@ -841,24 +947,31 @@ private final class BookmarkSlotControl: UIControl {
     }
 
     func configure(
-        number: Int,
+        title: String,
+        accessibilityLabel: String,
         isSet: Bool,
         goToBookmark: @escaping () -> Void,
-        storeBookmark: @escaping () -> Void
+        storeBookmark: @escaping () -> Void,
+        removeBookmark: (() -> Void)?,
+        holdHint: String,
+        savedHint: String
     ) {
         self.goToBookmark = goToBookmark
         self.storeBookmark = storeBookmark
-        label.text = "\(number)"
+        self.removeBookmark = removeBookmark
+        holdHintText = holdHint
+        savedHintText = savedHint
+        label.text = title
         label.font = .monospacedDigitSystemFont(ofSize: 17, weight: isSet ? .semibold : .regular)
         holdProgressLayer.strokeColor = tintColor.cgColor
         mutedColor = isSet ? tintColor.withAlphaComponent(0.18) : .clear
         if !isHighlighted {
             backgroundColor = mutedColor
         }
-        accessibilityLabel = "Bookmark \(number)"
+        self.accessibilityLabel = accessibilityLabel
         accessibilityHint = isSet
-            ? "Double tap to go to its saved page. Press and hold to replace it with the current page."
-            : "Press and hold to save the current page."
+            ? "Double tap to go to its saved page. Press and hold to replace it with the current page. Drag left to remove it."
+            : "Press and hold to add the current page as a new bookmark."
     }
 
     @objc private func pressBegan() {
@@ -873,7 +986,7 @@ private final class BookmarkSlotControl: UIControl {
         progress.timingFunction = CAMediaTimingFunction(name: .linear)
         holdProgressLayer.add(progress, forKey: "holdProgress")
         holdProgressLayer.strokeEnd = 1
-        holdHint.text = "Hold"
+        holdHint.text = holdHintText
         holdHint.transform = CGAffineTransform(translationX: 0, y: 4)
         UIView.animate(withDuration: 0.16, delay: 0, options: [.beginFromCurrentState]) {
             self.holdHint.alpha = 1
@@ -903,7 +1016,7 @@ private final class BookmarkSlotControl: UIControl {
         }
 
         if recorded {
-            holdHint.text = "Saved"
+            holdHint.text = savedHintText
             let pulse = CAAnimationGroup()
             let scale = CABasicAnimation(keyPath: "transform.scale")
             scale.fromValue = 1
@@ -932,8 +1045,11 @@ private final class BookmarkSlotControl: UIControl {
     }
 
     @objc private func tapped() {
-        defer { didStoreDuringTouch = false }
-        guard !didStoreDuringTouch else { return }
+        defer {
+            didStoreDuringTouch = false
+            didRemoveDuringTouch = false
+        }
+        guard !didStoreDuringTouch, !didRemoveDuringTouch else { return }
         releaseTension()
         goToBookmark()
     }
@@ -943,6 +1059,40 @@ private final class BookmarkSlotControl: UIControl {
         didStoreDuringTouch = true
         storeBookmark()
         releaseTension(recorded: true)
+    }
+
+    @objc private func panned(_ recognizer: UIPanGestureRecognizer) {
+        guard removeBookmark != nil else { return }
+        let translation = recognizer.translation(in: self)
+        switch recognizer.state {
+        case .began, .changed:
+            guard translation.x < 0 else { return }
+            didStoreDuringTouch = true
+            releaseTension()
+            let progress = min(1, abs(translation.x) / 56)
+            backgroundColor = UIColor.systemRed.withAlphaComponent(0.18 + 0.36 * progress)
+            transform = CGAffineTransform(translationX: max(-14, translation.x * 0.25), y: 0)
+        case .ended:
+            guard translation.x < -56 else {
+                releaseTension()
+                didStoreDuringTouch = false
+                return
+            }
+            didRemoveDuringTouch = true
+            removeBookmark?()
+            UIView.animate(withDuration: 0.18, animations: {
+                self.alpha = 0
+                self.transform = CGAffineTransform(translationX: -24, y: 0)
+            }) { _ in
+                self.alpha = 1
+                self.transform = .identity
+            }
+        case .cancelled, .failed:
+            releaseTension()
+            didStoreDuringTouch = false
+        default:
+            break
+        }
     }
 }
 
@@ -1089,7 +1239,7 @@ private final class OpenDocument: Identifiable {
         originalURLString: String,
         lastPageIndex: Int = 0,
         displaysAsBook: Bool = true,
-        bookmarkPageIndices: [Int?] = [nil, nil, nil],
+        bookmarkPageIndices: [Int?] = [],
         isAccessingFile: Bool
     ) {
         self.url = url
@@ -1098,10 +1248,7 @@ private final class OpenDocument: Identifiable {
         self.originalURLString = originalURLString
         self.lastPageIndex = lastPageIndex
         self.displaysAsBook = displaysAsBook
-        self.bookmarkPageIndices = Array(bookmarkPageIndices.prefix(3))
-        while self.bookmarkPageIndices.count < 3 {
-            self.bookmarkPageIndices.append(nil)
-        }
+        self.bookmarkPageIndices = bookmarkPageIndices
         self.isAccessingFile = isAccessingFile
         self.navigationHistory = [lastPageIndex]
         self.navigationHistoryIndex = 0
@@ -1238,7 +1385,7 @@ private final class OpenDocument: Identifiable {
                 originalURLString: savedDocument.originalURLString ?? "",
                 lastPageIndex: savedDocument.lastPageIndex,
                 displaysAsBook: savedDocument.displaysAsBook ?? true,
-                bookmarkPageIndices: savedDocument.bookmarkPageIndices ?? [nil, nil, nil],
+                bookmarkPageIndices: savedDocument.bookmarkPageIndices ?? [],
                 isAccessingFile: false
             )
         }

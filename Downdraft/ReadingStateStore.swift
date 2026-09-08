@@ -34,11 +34,9 @@ enum ReadingStateStore {
         static func initial(pageIndex: Int, bookmarks: [Int?]) -> State {
             let timestamp = Date()
             let deviceID = ReadingStateStore.deviceID
-            let normalizedBookmarks = Array(bookmarks.prefix(3))
-                + Array(repeating: nil, count: max(0, 3 - bookmarks.count))
             return State(
                 page: Page(index: pageIndex, modifiedAt: timestamp, deviceID: deviceID),
-                bookmarks: normalizedBookmarks.map {
+                bookmarks: bookmarks.map {
                     Bookmark(pageIndex: $0, modifiedAt: timestamp, deviceID: deviceID)
                 }
             )
@@ -121,12 +119,15 @@ enum ReadingStateStore {
         fallbackPageIndex: Int,
         fallbackBookmarks: [Int?]
     ) {
-        guard (0..<3).contains(index) else { return }
+        guard index >= 0 else { return }
         var state = state(
             for: identity,
             fallbackPageIndex: fallbackPageIndex,
             fallbackBookmarks: fallbackBookmarks
         )
+        while state.bookmarks.count <= index {
+            state.bookmarks.append(.init(pageIndex: nil, modifiedAt: .distantPast, deviceID: ""))
+        }
         state.bookmarks[index] = .init(pageIndex: pageIndex, modifiedAt: Date(), deviceID: deviceID)
         save(state, for: identity)
     }
@@ -148,7 +149,7 @@ enum ReadingStateStore {
     private static func merged(_ lhs: State, _ rhs: State) -> State {
         State(
             page: newer(lhs.page, rhs.page),
-            bookmarks: zip(normalized(lhs.bookmarks), normalized(rhs.bookmarks)).map(newer)
+            bookmarks: mergedBookmarks(lhs.bookmarks, rhs.bookmarks)
         )
     }
 
@@ -166,15 +167,16 @@ enum ReadingStateStore {
         return lhs.deviceID >= rhs.deviceID ? lhs : rhs
     }
 
-    private static func normalized(_ bookmarks: [Int?]) -> [Int?] {
-        Array(bookmarks.prefix(3)) + Array(repeating: nil, count: max(0, 3 - bookmarks.count))
-    }
-
-    private static func normalized(_ bookmarks: [State.Bookmark]) -> [State.Bookmark] {
-        Array(bookmarks.prefix(3)) + Array(
-            repeating: .init(pageIndex: nil, modifiedAt: .distantPast, deviceID: ""),
-            count: max(0, 3 - bookmarks.count)
-        )
+    private static func mergedBookmarks(_ lhs: [State.Bookmark], _ rhs: [State.Bookmark]) -> [State.Bookmark] {
+        let count = max(lhs.count, rhs.count)
+        return (0..<count).map { index in
+            switch (lhs.indices.contains(index) ? lhs[index] : nil, rhs.indices.contains(index) ? rhs[index] : nil) {
+            case let (left?, right?): return newer(left, right)
+            case let (left?, nil): return left
+            case let (nil, right?): return right
+            case (nil, nil): return .init(pageIndex: nil, modifiedAt: .distantPast, deviceID: "")
+            }
+        }
     }
 
     private static func decode(_ data: Data?) -> State? {
