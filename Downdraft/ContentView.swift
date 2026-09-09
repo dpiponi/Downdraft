@@ -599,7 +599,8 @@ struct ContentView: View {
             id: document.id,
             name: document.displayName,
             bookmarkData: document.bookmarkData,
-            document: document.pdfDocument
+            document: document.pdfDocument,
+            thumbnailCacheIdentity: document.readingStateIdentity
         )
         outlineDestination = nil
         clearSearch()
@@ -1411,12 +1412,19 @@ private struct DocumentSwitcherView: View {
         min(640, max(220, CGFloat(documents.count) * 68 + 72))
     }
 
+    private func thumbnailData(for document: OpenDocument) -> Data? {
+        DocumentThumbnailCache.data(
+            contentIdentity: document.readingStateIdentity,
+            bookmarkData: document.bookmarkData
+        ) ?? recentThumbnails[document.bookmarkData]
+    }
+
     var body: some View {
         NavigationStack {
             List {
                 ForEach(documents) { document in
                     HStack(spacing: 12) {
-                        DocumentThumbnail(data: recentThumbnails[document.bookmarkData])
+                        DocumentThumbnail(data: thumbnailData(for: document))
 
                         Button {
                             select(document.id)

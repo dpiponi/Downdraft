@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import PDFKit
 import UIKit
@@ -27,8 +28,21 @@ enum RecentDocumentStore {
         return documents
     }
 
-    static func record(id: UUID, name: String, bookmarkData: Data, document: PDFDocument?) {
+    static func record(
+        id: UUID,
+        name: String,
+        bookmarkData: Data,
+        document: PDFDocument?,
+        thumbnailCacheIdentity: String? = nil
+    ) {
         let thumbnailData = thumbnailData(for: document?.page(at: 0))
+        if let thumbnailData {
+            DocumentThumbnailCache.store(
+                thumbnailData,
+                contentIdentity: thumbnailCacheIdentity,
+                bookmarkData: bookmarkData
+            )
+        }
         let recentDocument = RecentDocument(
             id: id,
             displayName: name,
@@ -70,5 +84,83 @@ enum RecentDocumentStore {
             page.draw(with: .mediaBox, to: context)
         }
         return image.pngData()
+    }
+}
+
+/// First-page previews are deliberately separate from the four-item widget
+/// list.  The app keeps a bounded local cache so reopening an old tab never
+/// requires eagerly loading its PDF just to populate the document chooser.
+enum DocumentThumbnailCache {
+    private static let maximumEntryCount = 100
+    private static let cacheDirectory: URL? = FileManager.default.urls(
+        for: .cachesDirectory,
+        in: .userDomainMask
+    ).first?.appendingPathComponent("DowndraftPDFThumbnails", isDirectory: true)
+    private static var indexURL: URL? {
+        cacheDirectory?.appendingPathComponent("index.json")
+    }
+
+    private struct Entry: Codable {
+        var key: String
+        var lastUsed: Date
+    }
+
+    static func data(contentIdentity: String?, bookmarkData: Data) -> Data? {
+        for key in keys(contentIdentity: contentIdentity, bookmarkData: bookmarkData) {
+            guard let data = try? Data(contentsOf: fileURL(for: key)) else { continue }
+            return data
+        }
+        return nil
+    }
+
+    static func store(_ data: Data, contentIdentity: String?, bookmarkData: Data) {
+        guard let directory = cacheDirectory else { return }
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        // The Files bookmark survives a relaunch even before a lazy PDF has
+        // been reopened and had its content identity recalculated.
+        let key = keys(contentIdentity: contentIdentity, bookmarkData: bookmarkData).last!
+        try? data.write(to: fileURL(for: key), options: .atomic)
+
+        var entries = loadIndex()
+        entries.removeAll { $0.key == key }
+        entries.append(Entry(key: key, lastUsed: Date()))
+        entries.sort { $0.lastUsed > $1.lastUsed }
+        let expiredEntries = entries.dropFirst(maximumEntryCount)
+        for entry in expiredEntries {
+            try? FileManager.default.removeItem(at: fileURL(for: entry.key))
+        }
+        saveIndex(Array(entries.prefix(maximumEntryCount)))
+    }
+
+    private static func keys(contentIdentity: String?, bookmarkData: Data) -> [String] {
+        let bookmarkKey = digest(bookmarkData)
+        if let contentIdentity {
+            let contentKey = digest(Data(contentIdentity.utf8))
+            return contentKey == bookmarkKey ? [contentKey] : [contentKey, bookmarkKey]
+        }
+        return [bookmarkKey]
+    }
+
+    private static func fileURL(for key: String) -> URL {
+        cacheDirectory!.appendingPathComponent("\(key).png")
+    }
+
+    private static func loadIndex() -> [Entry] {
+        guard let indexURL,
+              let data = try? Data(contentsOf: indexURL),
+              let entries = try? JSONDecoder().decode([Entry].self, from: data) else {
+            return []
+        }
+        return entries
+    }
+
+    private static func saveIndex(_ entries: [Entry]) {
+        guard let indexURL,
+              let data = try? JSONEncoder().encode(entries) else { return }
+        try? data.write(to: indexURL, options: .atomic)
+    }
+
+    private static func digest(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 }
