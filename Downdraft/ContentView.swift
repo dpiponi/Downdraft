@@ -264,12 +264,14 @@ struct ContentView: View {
 
                         topReaderControls
 
+                        Spacer(minLength: 0)
+
                         if !isPhone || isSearchPresented {
                             searchControls
-                                .frame(maxWidth: isPhone ? .infinity : 500)
+                                .frame(maxWidth: isPhone ? .infinity : 440)
                         }
                     }
-                    .padding(.horizontal, 18)
+                    .padding(.horizontal, 28)
                     .padding(.top, isPhone ? 56 : 42)
                     Spacer(minLength: 0)
                 }
@@ -328,28 +330,32 @@ struct ContentView: View {
     }
 
     private var primaryReaderControls: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: isPhone ? 12 : 18) {
             if !isPhone {
                 Button { isShowingFilePicker = true } label: {
                     Image(systemName: "folder")
                 }
                 .accessibilityLabel("Open PDF")
+                .frame(width: 40, height: 40)
                 if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
                     Button { isShowingContents = true } label: {
                         Image(systemName: "list.bullet")
                     }
                     .accessibilityLabel("Contents")
+                    .frame(width: 40, height: 40)
                 }
                 Button { isShowingMetadata = true } label: {
                     Image(systemName: "info.circle")
                 }
                 .accessibilityLabel("PDF information")
+                .frame(width: 40, height: 40)
                 Button {
                     setFirstPageCover(!treatsFirstPageAsCover)
                 } label: {
                     Image(systemName: treatsFirstPageAsCover ? "rectangle.split.2x1" : "rectangle")
                 }
                 .accessibilityLabel("Toggle facing-page cover")
+                .frame(width: 40, height: 40)
             } else {
                 Button { isShowingFilePicker = true } label: {
                     Image(systemName: "folder")
