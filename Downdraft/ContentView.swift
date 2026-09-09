@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var documents = OpenDocument.restoreSavedDocuments()
     @State private var selectedDocumentID: OpenDocument.ID?
     @State private var isShowingFilePicker = false
+    @State private var isShowingDocumentSwitcher = false
     @State private var errorMessage: String?
     @State private var isReaderFocused = false
     @State private var searchText = ""
@@ -432,14 +433,8 @@ struct ContentView: View {
     }
 
     private var documentMenu: some View {
-        Menu {
-            ForEach(documents) { document in
-                Button(document.displayName) { selectDocument(document.id) }
-            }
-            if let id = selectedDocumentID {
-                Divider()
-                Button("Close Current Document", role: .destructive) { close(id) }
-            }
+        Button {
+            isShowingDocumentSwitcher = true
         } label: {
             Image(systemName: "doc.on.doc")
                 .font(.title3.weight(.medium))
@@ -447,6 +442,22 @@ struct ContentView: View {
         }
         .accessibilityLabel("Documents")
         .tint(.primary)
+        .popover(isPresented: $isShowingDocumentSwitcher) {
+            DocumentSwitcherView(
+                documents: documents,
+                selectedID: selectedDocumentID,
+                select: { id in
+                    isShowingDocumentSwitcher = false
+                    selectDocument(id)
+                },
+                openPDF: {
+                    isShowingDocumentSwitcher = false
+                    isShowingFilePicker = true
+                },
+                close: close
+            )
+            .presentationCompactAdaptation(.sheet)
+        }
     }
 
     private var searchControls: some View {
@@ -1378,6 +1389,91 @@ private final class OpenDocument: Identifiable {
                 isAccessingFile: false
             )
         }
+    }
+}
+
+private struct DocumentSwitcherView: View {
+    let documents: [OpenDocument]
+    let selectedID: OpenDocument.ID?
+    let select: (OpenDocument.ID) -> Void
+    let openPDF: () -> Void
+    let close: (OpenDocument.ID) -> Void
+
+    private var recentThumbnails: [Data: Data] {
+        Dictionary(
+            uniqueKeysWithValues: RecentDocumentStore.documents.compactMap { document in
+                document.thumbnailData.map { (document.bookmarkData, $0) }
+            }
+        )
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(documents) { document in
+                    HStack(spacing: 12) {
+                        DocumentThumbnail(data: recentThumbnails[document.bookmarkData])
+
+                        Button {
+                            select(document.id)
+                        } label: {
+                            Text(document.displayName)
+                                .foregroundStyle(.primary)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+
+                        if document.id == selectedID {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(.tint)
+                        }
+
+                        Button {
+                            close(document.id)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Close \(document.displayName)")
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+            .navigationTitle("Open PDFs")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Open PDF", systemImage: "folder") {
+                        openPDF()
+                    }
+                }
+            }
+        }
+        .frame(minWidth: 340, idealWidth: 520, maxWidth: 600, minHeight: 220)
+    }
+}
+
+private struct DocumentThumbnail: View {
+    let data: Data?
+
+    var body: some View {
+        Group {
+            if let data, let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: "doc.richtext")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
+            }
+        }
+        .frame(width: 36, height: 48)
+        .clipShape(RoundedRectangle(cornerRadius: 5))
     }
 }
 
