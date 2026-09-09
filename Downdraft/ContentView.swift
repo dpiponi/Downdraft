@@ -102,11 +102,9 @@ struct ContentView: View {
             // chrome is therefore a sibling overlay, never a toolbar.
             .toolbar(.hidden, for: .navigationBar)
         }
-        // Changing `statusBarHidden` changes the hosting controller's safe
-        // area, which makes PDFKit relayout even though the status bar is an
-        // overlay. Persistent system overlays handle reader-mode chrome
-        // without changing the PDF view's geometry.
-        .statusBarHidden(false)
+        // The reader chrome floats over a fixed PDF view, so its fullscreen
+        // state can also hide the system status bar.
+        .statusBarHidden(isReaderFocused)
         .persistentSystemOverlays(isReaderFocused ? .hidden : .visible)
         .toolbar(.hidden, for: .bottomBar)
         .onSubmit(of: .search) {
