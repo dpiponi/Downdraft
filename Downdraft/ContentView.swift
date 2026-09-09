@@ -152,8 +152,12 @@ struct ContentView: View {
         .onAppear {
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
             deviceOrientation = UIDevice.current.orientation
-            if selectedDocumentID == nil, let firstDocument = documents.first {
-                selectDocument(firstDocument.id)
+            if selectedDocumentID == nil {
+                let documentID = OpenDocument.restoredSelectedDocumentID(in: documents)
+                    ?? documents.first?.id
+                if let documentID {
+                    selectDocument(documentID)
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(
@@ -580,6 +584,7 @@ struct ContentView: View {
         )
         outlineDestination = nil
         clearSearch()
+        saveDocuments()
     }
 
     private func performSearch() {
@@ -741,7 +746,7 @@ struct ContentView: View {
     }
 
     private func saveDocuments() {
-        OpenDocument.save(documents)
+        OpenDocument.save(documents, selectedDocumentID: selectedDocumentID)
     }
 
     private func restoreSharedReadingState(for document: OpenDocument) {
@@ -1191,6 +1196,12 @@ private final class OpenDocument: Identifiable {
         navigationHistoryIndex < navigationHistory.count - 1
     }
 
+    /// Survives the app's reconstruction of its in-memory document objects.
+    var persistentIdentity: String {
+        if !originalURLString.isEmpty { return originalURLString }
+        return url?.standardizedFileURL.absoluteString ?? ""
+    }
+
     init(
         url: URL?,
         bookmarkData: Data,
@@ -1314,8 +1325,9 @@ private final class OpenDocument: Identifiable {
     }
 
     private static let savedDocumentsKey = "openDocuments"
+    private static let selectedDocumentKey = "selectedDocumentIdentity"
 
-    static func save(_ documents: [OpenDocument]) {
+    static func save(_ documents: [OpenDocument], selectedDocumentID: OpenDocument.ID?) {
         let savedDocuments = documents.map {
             SavedDocument(
                 bookmarkData: $0.bookmarkData,
@@ -1328,6 +1340,16 @@ private final class OpenDocument: Identifiable {
         }
         guard let data = try? JSONEncoder().encode(savedDocuments) else { return }
         UserDefaults.standard.set(data, forKey: savedDocumentsKey)
+        if let selectedDocument = documents.first(where: { $0.id == selectedDocumentID }) {
+            UserDefaults.standard.set(selectedDocument.persistentIdentity, forKey: selectedDocumentKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: selectedDocumentKey)
+        }
+    }
+
+    static func restoredSelectedDocumentID(in documents: [OpenDocument]) -> OpenDocument.ID? {
+        guard let identity = UserDefaults.standard.string(forKey: selectedDocumentKey) else { return nil }
+        return documents.first(where: { $0.persistentIdentity == identity })?.id
     }
 
     static func restoreSavedDocuments() -> [OpenDocument] {
