@@ -306,7 +306,7 @@ struct ContentView: View {
                         .padding(.bottom, isPhone ? 14 : 10)
                 }
                 .padding(.horizontal, 12)
-                .background(.bar)
+                .background(.thinMaterial)
                 .clipShape(Capsule())
                 .padding(.horizontal, 28)
                 .padding(.bottom, isPhone ? 56 : 42)
