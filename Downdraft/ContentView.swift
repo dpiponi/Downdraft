@@ -276,16 +276,18 @@ struct ContentView: View {
             }
             .transition(.move(edge: .top).combined(with: .opacity))
 
-            GeometryReader { geometry in
+            GeometryReader { _ in
                 VStack(spacing: 0) {
-                    Spacer(minLength: geometry.size.height * 0.57)
+                    Spacer(minLength: 0)
                     HStack {
                         Spacer(minLength: 0)
                         bookmarkControls
                     }
-                    .padding(.trailing, isPhone ? 12 : 18)
-                    Spacer(minLength: 0)
+                    // Match the scrubber capsule's trailing edge.  The
+                    // stack grows upward while the add control stays put.
+                    .padding(.trailing, 28)
                 }
+                .padding(.bottom, isPhone ? 176 : 126)
             }
             .transition(.move(edge: .trailing).combined(with: .opacity))
 
