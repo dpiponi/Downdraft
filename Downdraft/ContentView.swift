@@ -1438,7 +1438,9 @@ private struct DocumentSwitcherView: View {
                             close(document.id)
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
+                                .font(.title3)
+                                .foregroundStyle(.red)
+                                .frame(width: 32, height: 32)
                         }
                         .buttonStyle(.borderless)
                         .accessibilityLabel("Close \(document.displayName)")
