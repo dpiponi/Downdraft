@@ -1407,6 +1407,10 @@ private struct DocumentSwitcherView: View {
         )
     }
 
+    private var preferredHeight: CGFloat {
+        min(640, max(220, CGFloat(documents.count) * 68 + 72))
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -1451,7 +1455,14 @@ private struct DocumentSwitcherView: View {
                 }
             }
         }
-        .frame(minWidth: 340, idealWidth: 520, maxWidth: 600, minHeight: 220)
+        .frame(
+            minWidth: 340,
+            idealWidth: 520,
+            maxWidth: 600,
+            minHeight: 220,
+            idealHeight: preferredHeight,
+            maxHeight: 640
+        )
     }
 }
 
