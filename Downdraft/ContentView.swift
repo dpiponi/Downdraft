@@ -269,7 +269,7 @@ struct ContentView: View {
                 // Controls do not fill this entire rectangle, but every
                 // point within it is UI space and must not fall through to
                 // the gesture-heavy PDFView underneath.
-                Color.clear
+                Color.black.opacity(0.001)
                     .frame(height: isPhone ? 170 : 140)
                     .contentShape(Rectangle())
                     .onTapGesture { }
@@ -293,6 +293,7 @@ struct ContentView: View {
                     .padding(.top, isPhone ? 56 : 42)
                     Spacer(minLength: 0)
                 }
+                .zIndex(1)
             }
             .transition(.move(edge: .top).combined(with: .opacity))
 
@@ -352,37 +353,45 @@ struct ContentView: View {
             if !isPhone {
                 Button { isShowingFilePicker = true } label: {
                     Image(systemName: "folder")
+                        .frame(width: 48, height: 48)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Open PDF")
-                .frame(width: 40, height: 40)
                 if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
                     Button { isShowingContents = true } label: {
                         Image(systemName: "list.bullet")
+                            .frame(width: 48, height: 48)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel("Contents")
-                    .frame(width: 40, height: 40)
                 }
                 Button { isShowingMetadata = true } label: {
                     Image(systemName: "info.circle")
+                        .frame(width: 48, height: 48)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel("PDF information")
-                .frame(width: 40, height: 40)
                 Button {
                     setFirstPageCover(!treatsFirstPageAsCover)
                 } label: {
                     Image(systemName: treatsFirstPageAsCover ? "rectangle.split.2x1" : "rectangle")
+                        .frame(width: 48, height: 48)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Toggle facing-page cover")
-                .frame(width: 40, height: 40)
             } else {
                 Button { isShowingFilePicker = true } label: {
                     Image(systemName: "folder")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Open PDF")
                 Button {
                     isSearchPresented.toggle()
                 } label: {
                     Image(systemName: "magnifyingglass")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Search")
                 Menu("More", systemImage: "ellipsis.circle") {
@@ -458,6 +467,8 @@ struct ContentView: View {
             Image(systemName: "doc.on.doc")
                 .font(.title3.weight(.medium))
                 .foregroundStyle(.primary)
+                .frame(width: 48, height: 48)
+                .contentShape(Circle())
         }
         .accessibilityLabel("Documents")
         .tint(.white)
@@ -1449,23 +1460,25 @@ private struct DocumentSwitcherView: View {
             List {
                 ForEach(documents) { document in
                     HStack(spacing: 12) {
-                        DocumentThumbnail(data: thumbnailData(for: document))
-
                         Button {
                             select(document.id)
                         } label: {
-                            Text(document.displayName)
-                                .foregroundStyle(.primary)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            HStack(spacing: 12) {
+                                DocumentThumbnail(data: thumbnailData(for: document))
+                                Text(document.displayName)
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                if document.id == selectedID {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(.tint)
+                                }
+                            }
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-
-                        if document.id == selectedID {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(.tint)
-                        }
 
                         Button {
                             close(document.id)
