@@ -250,14 +250,14 @@ struct ContentView: View {
         ZStack {
             VStack(spacing: 0) {
                 LinearGradient(
-                    colors: [.black.opacity(0.58), .black.opacity(0)],
+                    colors: [.black.opacity(0.68), .black.opacity(0)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
                 .frame(height: isPhone ? 210 : 180)
                 Spacer(minLength: 0)
                 LinearGradient(
-                    colors: [.black.opacity(0), .black.opacity(0.58)],
+                    colors: [.black.opacity(0), .black.opacity(0.68)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
