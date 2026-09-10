@@ -248,6 +248,23 @@ struct ContentView: View {
     /// changing PDFKit's frame or safe area.
     private func readerChrome(for document: PDFDocument) -> some View {
         ZStack {
+            VStack(spacing: 0) {
+                LinearGradient(
+                    colors: [.black.opacity(0.58), .black.opacity(0)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: isPhone ? 210 : 180)
+                Spacer(minLength: 0)
+                LinearGradient(
+                    colors: [.black.opacity(0), .black.opacity(0.58)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: isPhone ? 260 : 200)
+            }
+            .allowsHitTesting(false)
+
             ZStack(alignment: .top) {
                 // Controls do not fill this entire rectangle, but every
                 // point within it is UI space and must not fall through to
@@ -261,7 +278,6 @@ struct ContentView: View {
                     HStack(alignment: .center, spacing: 12) {
                         documentMenu
                             .frame(width: 48, height: 48)
-                            .background(.thinMaterial, in: Circle())
 
                         topReaderControls
 
@@ -306,10 +322,10 @@ struct ContentView: View {
                         .padding(.bottom, isPhone ? 14 : 10)
                 }
                 .padding(.horizontal, 12)
-                .background(.thinMaterial)
-                .clipShape(Capsule())
                 .padding(.horizontal, 28)
                 .padding(.bottom, isPhone ? 56 : 42)
+                .foregroundStyle(.white)
+                .tint(.white)
             }
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
@@ -324,8 +340,7 @@ struct ContentView: View {
                 historyControls
                     .padding(.horizontal, 16)
                     .frame(height: 58)
-                    .background(.thinMaterial, in: Capsule())
-                    .tint(.primary)
+                    .tint(.white)
             }
         }
     }
@@ -378,8 +393,8 @@ struct ContentView: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 58)
-        .background(.thinMaterial, in: Capsule())
-        .tint(.primary)
+        .tint(.white)
+        .foregroundStyle(.white)
         .font(.title3.weight(.medium))
     }
 
@@ -427,8 +442,8 @@ struct ContentView: View {
             .frame(width: 40, height: 40)
         }
         .padding(12)
-        .background(.thinMaterial, in: Capsule())
-        .tint(.primary)
+        .tint(.white)
+        .foregroundStyle(.white)
         .font(.title3.weight(.medium))
     }
 
@@ -441,7 +456,7 @@ struct ContentView: View {
                 .foregroundStyle(.primary)
         }
         .accessibilityLabel("Documents")
-        .tint(.primary)
+        .tint(.white)
         .popover(isPresented: $isShowingDocumentSwitcher) {
             DocumentSwitcherView(
                 documents: documents,
@@ -488,8 +503,13 @@ struct ContentView: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 58)
-        .background(.thinMaterial, in: Capsule())
-        .tint(.primary)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(.white.opacity(0.45))
+                .frame(height: 1)
+        }
+        .tint(.white)
+        .foregroundStyle(.white)
     }
 
     private var historyControls: some View {
