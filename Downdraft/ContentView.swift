@@ -938,6 +938,7 @@ private final class BookmarkSlotControl: UIControl {
         isEnabled = true
         label.textAlignment = .center
         label.adjustsFontForContentSizeCategory = true
+        label.textColor = .white
         label.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         holdProgressLayer.fillColor = UIColor.clear.cgColor
         holdProgressLayer.lineWidth = 2.5
@@ -995,9 +996,15 @@ private final class BookmarkSlotControl: UIControl {
         self.storeBookmark = storeBookmark
         self.removeBookmark = removeBookmark
         label.text = title
-        label.font = .monospacedDigitSystemFont(ofSize: 17, weight: isSet ? .semibold : .regular)
-        holdProgressLayer.strokeColor = tintColor.cgColor
-        mutedColor = isSet ? tintColor.withAlphaComponent(0.18) : .clear
+        let isAddControl = title == "+"
+        label.font = isAddControl
+            ? .systemFont(ofSize: 24, weight: .medium)
+            : .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
+        let bookmarkBlue = UIColor.systemBlue
+        holdProgressLayer.strokeColor = bookmarkBlue.cgColor
+        mutedColor = isSet ? bookmarkBlue.withAlphaComponent(0.38) : .clear
+        layer.borderWidth = isAddControl ? 1.5 : 0
+        layer.borderColor = isAddControl ? UIColor.white.withAlphaComponent(0.78).cgColor : nil
         if !isHighlighted {
             backgroundColor = mutedColor
         }
@@ -1020,7 +1027,7 @@ private final class BookmarkSlotControl: UIControl {
         holdProgressLayer.add(progress, forKey: "holdProgress")
         holdProgressLayer.strokeEnd = 1
         UIView.animate(withDuration: 0.5, delay: 0, options: [.curveLinear, .beginFromCurrentState]) {
-            self.backgroundColor = self.tintColor.withAlphaComponent(0.52)
+            self.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.62)
             self.transform = CGAffineTransform(scaleX: 1.8, y: 1.8)
         }
     }
