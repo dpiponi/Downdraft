@@ -278,7 +278,7 @@ struct ContentView: View {
                     HStack(alignment: .center, spacing: 12) {
                         documentMenu
                             .frame(width: 48, height: 48)
-                            .background(Color.clear, in: Circle())
+                            .background(.black.opacity(0.001), in: Circle())
 
                         topReaderControls
 
@@ -341,7 +341,7 @@ struct ContentView: View {
                 historyControls
                     .padding(.horizontal, 16)
                     .frame(height: 58)
-                    .background(Color.clear, in: Capsule())
+                    .background(.black.opacity(0.001), in: Capsule())
                     .tint(.white)
             }
         }
@@ -395,7 +395,7 @@ struct ContentView: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 58)
-        .background(Color.clear, in: Capsule())
+        .background(.black.opacity(0.001), in: Capsule())
         .tint(.white)
         .foregroundStyle(.white)
         .font(.title3.weight(.medium))
@@ -445,7 +445,7 @@ struct ContentView: View {
             .frame(width: 40, height: 40)
         }
         .padding(12)
-        .background(Color.clear, in: Capsule())
+        .background(.black.opacity(0.001), in: Capsule())
         .tint(.white)
         .foregroundStyle(.white)
         .font(.title3.weight(.medium))
@@ -507,7 +507,7 @@ struct ContentView: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 58)
-        .background(Color.clear, in: Capsule())
+        .background(.black.opacity(0.001), in: Capsule())
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(.white.opacity(0.45))
