@@ -547,6 +547,10 @@ struct ContentView: View {
                     .disabled(!document.canNavigateForward)
             }
         }
+        // OpenDocument is a reference type.  Recreate these controls when its
+        // navigation history changes so their enabled state cannot lag behind
+        // the first scrub action.
+        .id(navigationRevision)
     }
 
 
