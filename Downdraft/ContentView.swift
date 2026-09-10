@@ -464,9 +464,9 @@ struct ContentView: View {
         Button {
             isShowingDocumentSwitcher = true
         } label: {
-            Image(systemName: "doc.on.doc")
-                .font(.title3.weight(.medium))
-                .foregroundStyle(.primary)
+            Text("§")
+                .font(.system(size: 27, weight: .semibold, design: .serif))
+                .foregroundStyle(.white)
                 .frame(width: 48, height: 48)
                 .contentShape(Circle())
         }
