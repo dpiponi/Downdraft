@@ -924,6 +924,7 @@ private final class BookmarkSlotControl: UIControl {
     private var removeBookmark: (() -> Void)?
     private var didStoreDuringTouch = false
     private var didRemoveDuringTouch = false
+    private var isAddControl = false
     private var mutedColor = UIColor.clear
     private let size: CGFloat
 
@@ -970,7 +971,10 @@ private final class BookmarkSlotControl: UIControl {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        label.frame = bounds
+        label.frame = bounds.offsetBy(
+            dx: isAddControl ? 1 : 0,
+            dy: isAddControl ? -1 : 0
+        )
         layer.cornerRadius = bounds.height / 2
         holdProgressLayer.frame = bounds
         holdProgressLayer.path = UIBezierPath(
@@ -996,7 +1000,7 @@ private final class BookmarkSlotControl: UIControl {
         self.storeBookmark = storeBookmark
         self.removeBookmark = removeBookmark
         label.text = title
-        let isAddControl = title == "+"
+        isAddControl = title == "+"
         label.font = isAddControl
             ? .systemFont(ofSize: 24, weight: .medium)
             : .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
