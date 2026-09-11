@@ -269,9 +269,27 @@ struct PDFDocumentView: UIViewRepresentable {
 
         private func publishReadingPage(in pdfView: PDFView, fallback: Int? = nil) {
             guard let document = pdfView.document else { return }
-            let readingPageIndex = pdfView.visiblePages
-                .map { document.index(for: $0) }
-                .min() ?? fallback ?? pdfView.currentPage.map { document.index(for: $0) }
+            let visiblePageFrames = pdfView.visiblePages.map { page in
+                (
+                    index: document.index(for: page),
+                    frame: pdfView.convert(page.bounds(for: .cropBox), from: page)
+                )
+            }
+            // Prefer the first page whose top edge actually begins in the
+            // viewport.  A page with only its final few points visible above
+            // the viewport should not become the bookmark target.
+            let firstPageStartingInView: Int? = visiblePageFrames
+                .filter { $0.frame.minY >= pdfView.bounds.minY - 1 && $0.frame.minY < pdfView.bounds.maxY }
+                .min {
+                    if abs($0.frame.minY - $1.frame.minY) > 1 {
+                        return $0.frame.minY < $1.frame.minY
+                    }
+                    return $0.frame.minX < $1.frame.minX
+                }
+                .map(\.index)
+            let readingPageIndex = firstPageStartingInView
+                ?? visiblePageFrames.map(\.index).min()
+                ?? fallback ?? pdfView.currentPage.map { document.index(for: $0) }
                 ?? lastKnownPageIndex
             lastKnownPageIndex = readingPageIndex
             onPageChanged(readingPageIndex)
