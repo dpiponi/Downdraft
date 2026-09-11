@@ -1553,6 +1553,7 @@ private struct DocumentSwitcherView: View {
     let select: (OpenDocument.ID) -> Void
     let openPDF: () -> Void
     let close: (OpenDocument.ID) -> Void
+    @Environment(\.dismiss) private var dismiss
 
     private var recentThumbnails: [Data: Data] {
         Dictionary(
@@ -1623,6 +1624,11 @@ private struct DocumentSwitcherView: View {
             }
             .navigationTitle("Open PDFs")
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Open PDF", systemImage: "folder") {
                         openPDF()
