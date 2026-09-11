@@ -230,7 +230,7 @@ struct PDFDocumentView: UIViewRepresentable {
             guard let pdfView = notification.object as? PDFView,
                   let document = pdfView.document,
                   let page = pdfView.currentPage else { return }
-            let pageIndex = document.index(for: page)
+            let currentPageIndex = document.index(for: page)
             hideSearchHighlight()
 
             // PDFKit reports page zero while it is rebuilding its private
@@ -241,7 +241,7 @@ struct PDFDocumentView: UIViewRepresentable {
             }
 
             if let protectedPageIndex,
-               pageIndex != protectedPageIndex,
+               currentPageIndex != protectedPageIndex,
                let protectedPage = document.page(at: protectedPageIndex) {
                 // A chrome toggle must not become a navigation action. PDFKit
                 // occasionally resets its rebuilt scroll view to page zero;
@@ -252,8 +252,16 @@ struct PDFDocumentView: UIViewRepresentable {
                 ))
                 return
             }
-            lastKnownPageIndex = pageIndex
-            onPageChanged(pageIndex)
+
+            // PDFKit's `currentPage` is generally the page nearest the
+            // viewport centre.  That is a poor bookmark target when several
+            // short, wide pages fit on screen: it can skip the first page the
+            // reader can see.  Use the leading page in reading order instead.
+            let readingPageIndex = pdfView.visiblePages
+                .map { document.index(for: $0) }
+                .min() ?? currentPageIndex
+            lastKnownPageIndex = readingPageIndex
+            onPageChanged(readingPageIndex)
             showPendingSearchHighlightIfReady(in: pdfView)
         }
 
