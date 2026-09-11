@@ -89,8 +89,14 @@ struct PDFDocumentView: UIViewRepresentable {
             }
             loadedDocument = document
             DispatchQueue.main.async { [weak self] in
-                self?.ignoresTransientPageChanges = false
-                self?.startObservingSearchHighlightDismissal(in: pdfView)
+                guard let self else { return }
+                self.ignoresTransientPageChanges = false
+                // PDFKit can finish its initial layout without a final
+                // page-change notification. Publish the settled visible page
+                // explicitly so a newly opened wide document can bookmark
+                // its first visible page immediately.
+                self.publishReadingPage(in: pdfView)
+                self.startObservingSearchHighlightDismissal(in: pdfView)
             }
         }
         func startObservingPageChanges(in pdfView: PDFView) {
@@ -257,12 +263,18 @@ struct PDFDocumentView: UIViewRepresentable {
             // viewport centre.  That is a poor bookmark target when several
             // short, wide pages fit on screen: it can skip the first page the
             // reader can see.  Use the leading page in reading order instead.
+            publishReadingPage(in: pdfView, fallback: currentPageIndex)
+            showPendingSearchHighlightIfReady(in: pdfView)
+        }
+
+        private func publishReadingPage(in pdfView: PDFView, fallback: Int? = nil) {
+            guard let document = pdfView.document else { return }
             let readingPageIndex = pdfView.visiblePages
                 .map { document.index(for: $0) }
-                .min() ?? currentPageIndex
+                .min() ?? fallback ?? pdfView.currentPage.map { document.index(for: $0) }
+                ?? lastKnownPageIndex
             lastKnownPageIndex = readingPageIndex
             onPageChanged(readingPageIndex)
-            showPendingSearchHighlightIfReady(in: pdfView)
         }
 
         @objc private func readerTapped(_ recognizer: UITapGestureRecognizer) {
