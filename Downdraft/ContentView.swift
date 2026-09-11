@@ -49,9 +49,9 @@ struct ContentView: View {
 
     private var maximumBookmarkRailButtons: Int {
         if isLandscapeInterface {
-            return isPhone ? 4 : 4
+            return isPhone ? 3 : 4
         }
-        return isPhone ? 5 : 7
+        return isPhone ? 4 : 6
     }
 
     /// Includes space for the add control, and for the overflow control when
@@ -411,19 +411,19 @@ struct ContentView: View {
     }
 
     private var bookmarkControls: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             ForEach(Array(visibleBookmarks.prefix(visibleBookmarkLimit)), id: \.index) { bookmark in
                 BookmarkSlotButton(
                     title: "\(visibleBookmarkNumber(for: bookmark.index))",
                     accessibilityLabel: "Bookmark \(visibleBookmarkNumber(for: bookmark.index))",
                     isSet: true,
                     thumbnail: bookmarkThumbnail(for: bookmark.pageIndex),
-                    size: 40,
+                    size: CGSize(width: 44, height: 62),
                     goToBookmark: { goToBookmark(at: bookmark.index) },
                     storeBookmark: { storeBookmark(at: bookmark.index) },
                     removeBookmark: { removeBookmark(at: bookmark.index) }
                 )
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 62)
             }
             if visibleBookmarks.count > visibleBookmarkLimit {
                 Menu {
@@ -439,7 +439,7 @@ struct ContentView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .frame(width: 40, height: 40)
+                        .frame(width: 44, height: 44)
                 }
                 .accessibilityLabel("More bookmarks")
             }
@@ -448,15 +448,15 @@ struct ContentView: View {
                 accessibilityLabel: "Add Bookmark",
                 isSet: false,
                 thumbnail: nil,
-                size: 40,
+                size: CGSize(width: 40, height: 40),
                 goToBookmark: { },
                 storeBookmark: addBookmark,
                 removeBookmark: nil
             )
             .frame(width: 40, height: 40)
         }
-        .padding(12)
-        .background(.black.opacity(0.001), in: Capsule())
+        .padding(8)
+        .background(.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .tint(.white)
         .foregroundStyle(.white)
         .font(.title3.weight(.medium))
@@ -924,7 +924,7 @@ private struct BookmarkSlotButton: UIViewRepresentable {
     let accessibilityLabel: String
     let isSet: Bool
     let thumbnail: UIImage?
-    var size: CGFloat = 36
+    var size: CGSize = CGSize(width: 36, height: 36)
     let goToBookmark: () -> Void
     let storeBookmark: () -> Void
     let removeBookmark: (() -> Void)?
@@ -956,14 +956,15 @@ private final class BookmarkSlotControl: UIControl {
     private var didStoreDuringTouch = false
     private var didRemoveDuringTouch = false
     private var isAddControl = false
+    private var isThumbnailControl = false
     private var mutedColor = UIColor.clear
-    private let size: CGFloat
+    private let size: CGSize
 
     override var intrinsicContentSize: CGSize {
-        CGSize(width: size, height: size)
+        size
     }
 
-    init(size: CGFloat) {
+    init(size: CGSize) {
         self.size = size
         super.init(frame: .zero)
         isUserInteractionEnabled = true
@@ -1011,12 +1012,15 @@ private final class BookmarkSlotControl: UIControl {
             dx: isAddControl ? 1 : 0,
             dy: isAddControl ? -1 : 0
         )
-        layer.cornerRadius = bounds.height / 2
+        let cornerRadius = isThumbnailControl ? 6 : bounds.height / 2
+        layer.cornerRadius = cornerRadius
         thumbnailView.frame = bounds.insetBy(dx: 2, dy: 2)
-        thumbnailView.layer.cornerRadius = thumbnailView.bounds.height / 2
+        thumbnailView.layer.cornerRadius = isThumbnailControl ? 4 : thumbnailView.bounds.height / 2
         holdProgressLayer.frame = bounds
+        let progressBounds = bounds.insetBy(dx: 3, dy: 3)
         holdProgressLayer.path = UIBezierPath(
-            ovalIn: bounds.insetBy(dx: 3, dy: 3)
+            roundedRect: progressBounds,
+            cornerRadius: isThumbnailControl ? 4 : progressBounds.height / 2
         ).cgPath
     }
 
@@ -1043,6 +1047,7 @@ private final class BookmarkSlotControl: UIControl {
         thumbnailView.isHidden = thumbnail == nil
         label.isHidden = thumbnail != nil
         isAddControl = title == "+"
+        isThumbnailControl = isSet
         label.font = isAddControl
             ? .systemFont(ofSize: 24, weight: .medium)
             : .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
@@ -1054,6 +1059,7 @@ private final class BookmarkSlotControl: UIControl {
         if !isHighlighted {
             backgroundColor = mutedColor
         }
+        setNeedsLayout()
         self.accessibilityLabel = accessibilityLabel
         accessibilityHint = isSet
             ? "Double tap to go to its saved page. Press and hold to replace it with the current page. Drag left to remove it."
