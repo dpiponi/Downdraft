@@ -916,7 +916,9 @@ private enum BookmarkThumbnailCache {
         }
 
         guard let page = document.page(at: pageIndex) else { return nil }
-        let image = page.thumbnail(of: CGSize(width: 100, height: 140), for: .mediaBox)
+        // Cards are tiny, but a long press expands one into a useful preview.
+        // Keep enough source detail for that magnification to remain sharp.
+        let image = page.thumbnail(of: CGSize(width: 300, height: 420), for: .mediaBox)
         images.setObject(image, forKey: key)
         return image
     }
@@ -1065,7 +1067,7 @@ private final class BookmarkSlotControl: UIControl {
         setNeedsLayout()
         self.accessibilityLabel = accessibilityLabel
         accessibilityHint = isSet
-            ? "Double tap to go to its saved page. Press and hold to replace it with the current page. Drag left to remove it."
+            ? "Double tap to go to its saved page. Press and hold to enlarge its preview. Drag left to remove it."
             : "Press and hold to add the current page as a new bookmark."
     }
 
@@ -1124,6 +1126,7 @@ private final class BookmarkSlotControl: UIControl {
             holdProgressLayer.add(fade, forKey: "cancelHold")
         }
         holdProgressLayer.opacity = 0
+        layer.zPosition = 0
     }
 
     @objc private func tapped() {
@@ -1139,8 +1142,25 @@ private final class BookmarkSlotControl: UIControl {
     @objc private func longPressed(_ recognizer: UILongPressGestureRecognizer) {
         guard recognizer.state == .began else { return }
         didStoreDuringTouch = true
-        storeBookmark()
-        releaseTension(recorded: true)
+        guard !isAddControl else {
+            storeBookmark()
+            releaseTension(recorded: true)
+            return
+        }
+
+        // A held card becomes a momentary page magnifier.  It is deliberately
+        // kept in the same control, so releasing it cannot alter the bookmark.
+        holdProgressLayer.removeAllAnimations()
+        holdProgressLayer.opacity = 0
+        layer.zPosition = 100
+        UIView.animate(
+            withDuration: 0.18,
+            delay: 0,
+            options: [.beginFromCurrentState, .curveEaseOut]
+        ) {
+            self.backgroundColor = UIColor.black.withAlphaComponent(0.9)
+            self.transform = CGAffineTransform(scaleX: 3.4, y: 3.4)
+        }
     }
 
     @objc private func panned(_ recognizer: UIPanGestureRecognizer) {
