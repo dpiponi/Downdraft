@@ -418,11 +418,18 @@ struct ContentView: View {
                         .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Search")
-                Menu("More", systemImage: "ellipsis.circle") {
-                    if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
+                if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
+                    Menu("More", systemImage: "ellipsis.circle") {
                         Button("Contents", systemImage: "list.bullet") { isShowingContents = true }
+                        Button("PDF Information", systemImage: "info.circle") { isShowingMetadata = true }
                     }
-                    Button("PDF Information", systemImage: "info.circle") { isShowingMetadata = true }
+                } else {
+                    Button { isShowingMetadata = true } label: {
+                        Image(systemName: "info.circle")
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("PDF information")
                 }
             }
         }
