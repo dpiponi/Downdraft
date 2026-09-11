@@ -370,7 +370,7 @@ struct PDFDocumentView: UIViewRepresentable {
             let idealScale = pdfView.scaleFactor * (pdfView.bounds.width / pageFrame.width)
             let fitWidthScale = min(max(idealScale, pdfView.minScaleFactor), pdfView.maxScaleFactor)
             let distance = abs(pdfView.scaleFactor - fitWidthScale) / fitWidthScale
-            guard distance <= 0.055, distance > 0.002 else { return }
+            guard distance <= 0.075, distance > 0.002 else { return }
 
             pdfView.autoScales = false
             UIView.performWithoutAnimation {
