@@ -1,5 +1,6 @@
 import PDFKit
 import SwiftUI
+import UIKit
 
 struct PDFDocumentView: UIViewRepresentable {
     let document: PDFDocument
@@ -70,7 +71,9 @@ struct PDFDocumentView: UIViewRepresentable {
         private var displayedRequestedPageIndex: Int?
         private weak var readerTapGesture: UITapGestureRecognizer?
         private weak var searchHighlightOverlay: SearchMatchOverlayView?
+        private weak var observedPDFView: PDFView?
         private var observedMotionRecognizers = Set<ObjectIdentifier>()
+        private var observedPinchRecognizers = Set<ObjectIdentifier>()
         private var protectedPageIndex: Int?
         private var ignoresTransientPageChanges = false
         var lastKnownPageIndex = 0
@@ -80,6 +83,7 @@ struct PDFDocumentView: UIViewRepresentable {
             // first page, even when we immediately go to a saved page.  That
             // announcement is setup noise, not reader navigation.
             ignoresTransientPageChanges = true
+            observedPDFView = pdfView
             lastKnownPageIndex = pageIndex
             pdfView.document = document
             if let page = document.page(at: pageIndex) {
@@ -122,6 +126,10 @@ struct PDFDocumentView: UIViewRepresentable {
             for recognizer in recognizers where observedMotionRecognizers.insert(ObjectIdentifier(recognizer)).inserted {
                 recognizer.addTarget(self, action: #selector(readerMotionBegan(_:)))
             }
+            for recognizer in pinchGestures(in: pdfView)
+            where observedPinchRecognizers.insert(ObjectIdentifier(recognizer)).inserted {
+                recognizer.addTarget(self, action: #selector(pinchEnded(_:)))
+            }
         }
 
         func disableDoubleTapZoom(in pdfView: PDFView) {
@@ -141,6 +149,11 @@ struct PDFDocumentView: UIViewRepresentable {
         private func tapGestures(in view: UIView) -> [UITapGestureRecognizer] {
             let local = (view.gestureRecognizers ?? []).compactMap { $0 as? UITapGestureRecognizer }
             return local + view.subviews.flatMap(tapGestures(in:))
+        }
+
+        private func pinchGestures(in view: UIView) -> [UIPinchGestureRecognizer] {
+            let local = (view.gestureRecognizers ?? []).compactMap { $0 as? UIPinchGestureRecognizer }
+            return local + view.subviews.flatMap(pinchGestures(in:))
         }
 
         private func scrollViews(in view: UIView) -> [UIScrollView] {
@@ -335,6 +348,36 @@ struct PDFDocumentView: UIViewRepresentable {
             guard recognizer.state == .began || recognizer.state == .changed else { return }
             pendingSearchHighlight = nil
             hideSearchHighlight()
+        }
+
+        @objc private func pinchEnded(_ recognizer: UIPinchGestureRecognizer) {
+            guard recognizer.state == .ended,
+                  let pdfView = observedPDFView else { return }
+            // PDFKit settles its scroll view at the end of a pinch.  Measure
+            // on the following turn, then only snap when the reader has
+            // already landed close to fitting the page width.
+            DispatchQueue.main.async { [weak self, weak pdfView] in
+                guard let self, let pdfView, self.observedPDFView === pdfView else { return }
+                self.snapToFitWidthIfClose(in: pdfView)
+            }
+        }
+
+        private func snapToFitWidthIfClose(in pdfView: PDFView) {
+            guard let page = pdfView.currentPage else { return }
+            let pageFrame = pdfView.convert(page.bounds(for: .cropBox), from: page)
+            guard pageFrame.width > 0, pdfView.bounds.width > 0 else { return }
+
+            let idealScale = pdfView.scaleFactor * (pdfView.bounds.width / pageFrame.width)
+            let fitWidthScale = min(max(idealScale, pdfView.minScaleFactor), pdfView.maxScaleFactor)
+            let distance = abs(pdfView.scaleFactor - fitWidthScale) / fitWidthScale
+            guard distance <= 0.055, distance > 0.002 else { return }
+
+            pdfView.autoScales = false
+            UIView.performWithoutAnimation {
+                pdfView.scaleFactor = fitWidthScale
+                pdfView.layoutIfNeeded()
+            }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
 
         private func showPendingSearchHighlightIfReady(in pdfView: PDFView) {
