@@ -417,6 +417,7 @@ struct ContentView: View {
                     title: "\(visibleBookmarkNumber(for: bookmark.index))",
                     accessibilityLabel: "Bookmark \(visibleBookmarkNumber(for: bookmark.index))",
                     isSet: true,
+                    thumbnail: bookmarkThumbnail(for: bookmark.pageIndex),
                     size: 40,
                     goToBookmark: { goToBookmark(at: bookmark.index) },
                     storeBookmark: { storeBookmark(at: bookmark.index) },
@@ -446,6 +447,7 @@ struct ContentView: View {
                 title: "+",
                 accessibilityLabel: "Add Bookmark",
                 isSet: false,
+                thumbnail: nil,
                 size: 40,
                 goToBookmark: { },
                 storeBookmark: addBookmark,
@@ -736,6 +738,11 @@ struct ContentView: View {
         (bookmarkPageIndices[..<index].compactMap { $0 }.count) + 1
     }
 
+    private func bookmarkThumbnail(for pageIndex: Int) -> UIImage? {
+        guard let document = selectedDocument?.pdfDocument else { return nil }
+        return BookmarkThumbnailCache.image(for: document, pageIndex: pageIndex)
+    }
+
     private func openBookmark(_ bookmarkData: Data) {
         var isStale = false
         guard let url = try? URL(
@@ -895,10 +902,28 @@ private struct PageScrubber: View {
     }
 }
 
+@MainActor
+private enum BookmarkThumbnailCache {
+    private static let images = NSCache<NSString, UIImage>()
+
+    static func image(for document: PDFDocument, pageIndex: Int) -> UIImage? {
+        let key = "\(ObjectIdentifier(document))-\(pageIndex)" as NSString
+        if let cached = images.object(forKey: key) {
+            return cached
+        }
+
+        guard let page = document.page(at: pageIndex) else { return nil }
+        let image = page.thumbnail(of: CGSize(width: 100, height: 140), for: .mediaBox)
+        images.setObject(image, forKey: key)
+        return image
+    }
+}
+
 private struct BookmarkSlotButton: UIViewRepresentable {
     let title: String
     let accessibilityLabel: String
     let isSet: Bool
+    let thumbnail: UIImage?
     var size: CGFloat = 36
     let goToBookmark: () -> Void
     let storeBookmark: () -> Void
@@ -913,6 +938,7 @@ private struct BookmarkSlotButton: UIViewRepresentable {
             title: title,
             accessibilityLabel: accessibilityLabel,
             isSet: isSet,
+            thumbnail: thumbnail,
             goToBookmark: goToBookmark,
             storeBookmark: storeBookmark,
             removeBookmark: removeBookmark
@@ -922,6 +948,7 @@ private struct BookmarkSlotButton: UIViewRepresentable {
 
 private final class BookmarkSlotControl: UIControl {
     private let label = UILabel()
+    private let thumbnailView = UIImageView()
     private let holdProgressLayer = CAShapeLayer()
     private var goToBookmark: () -> Void = { }
     private var storeBookmark: () -> Void = { }
@@ -945,12 +972,17 @@ private final class BookmarkSlotControl: UIControl {
         label.adjustsFontForContentSizeCategory = true
         label.textColor = .white
         label.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        thumbnailView.contentMode = .scaleAspectFill
+        thumbnailView.clipsToBounds = true
+        thumbnailView.isUserInteractionEnabled = false
+        thumbnailView.alpha = 0.94
         holdProgressLayer.fillColor = UIColor.clear.cgColor
         holdProgressLayer.lineWidth = 2.5
         holdProgressLayer.lineCap = .round
         holdProgressLayer.strokeEnd = 0
         holdProgressLayer.opacity = 0
         layer.addSublayer(holdProgressLayer)
+        addSubview(thumbnailView)
         addSubview(label)
         addTarget(self, action: #selector(pressBegan), for: .touchDown)
         addTarget(self, action: #selector(tapped), for: .touchUpInside)
@@ -980,6 +1012,8 @@ private final class BookmarkSlotControl: UIControl {
             dy: isAddControl ? -1 : 0
         )
         layer.cornerRadius = bounds.height / 2
+        thumbnailView.frame = bounds.insetBy(dx: 2, dy: 2)
+        thumbnailView.layer.cornerRadius = thumbnailView.bounds.height / 2
         holdProgressLayer.frame = bounds
         holdProgressLayer.path = UIBezierPath(
             ovalIn: bounds.insetBy(dx: 3, dy: 3)
@@ -996,6 +1030,7 @@ private final class BookmarkSlotControl: UIControl {
         title: String,
         accessibilityLabel: String,
         isSet: Bool,
+        thumbnail: UIImage?,
         goToBookmark: @escaping () -> Void,
         storeBookmark: @escaping () -> Void,
         removeBookmark: (() -> Void)?
@@ -1004,6 +1039,9 @@ private final class BookmarkSlotControl: UIControl {
         self.storeBookmark = storeBookmark
         self.removeBookmark = removeBookmark
         label.text = title
+        thumbnailView.image = thumbnail
+        thumbnailView.isHidden = thumbnail == nil
+        label.isHidden = thumbnail != nil
         isAddControl = title == "+"
         label.font = isAddControl
             ? .systemFont(ofSize: 24, weight: .medium)
