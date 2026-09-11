@@ -1577,6 +1577,7 @@ private struct DocumentSwitcherView: View {
         NavigationStack {
             List {
                 ForEach(documents) { document in
+                    let isSelected = document.id == selectedID
                     HStack(spacing: 12) {
                         Button {
                             select(document.id)
@@ -1589,9 +1590,11 @@ private struct DocumentSwitcherView: View {
                                     .multilineTextAlignment(.leading)
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                                if document.id == selectedID {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(.tint)
+                                if isSelected {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(.white)
+                                        .accessibilityLabel("Current document")
                                 }
                             }
                             .contentShape(Rectangle())
@@ -1609,7 +1612,13 @@ private struct DocumentSwitcherView: View {
                         .buttonStyle(.borderless)
                         .accessibilityLabel("Close \(document.displayName)")
                     }
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 6)
+                    .background(
+                        isSelected ? Color.accentColor.opacity(0.5) : .clear,
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
             .navigationTitle("Open PDFs")
