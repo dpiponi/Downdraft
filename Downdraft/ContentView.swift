@@ -349,7 +349,7 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.horizontal, 28)
-                .padding(.bottom, isPhone ? 56 : 42)
+                .padding(.bottom, isPhone ? 44 : 42)
                 .foregroundStyle(.white)
                 .tint(.white)
             }
