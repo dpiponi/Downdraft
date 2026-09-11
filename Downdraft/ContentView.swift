@@ -27,6 +27,7 @@ struct ContentView: View {
     @State private var scrubberRevision = 0
     @State private var deviceOrientation = UIDevice.current.orientation
     @State private var isSearchPresented = false
+    @State private var bookmarkPreview: UIImage?
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -315,6 +316,26 @@ struct ContentView: View {
             }
             .transition(.move(edge: .trailing).combined(with: .opacity))
 
+            if let bookmarkPreview {
+                Image(uiImage: bookmarkPreview)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: isPhone ? 180 : 220, height: isPhone ? 252 : 308)
+                    .background(.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(.white.opacity(0.5), lineWidth: 1)
+                    }
+                    .shadow(color: .black.opacity(0.65), radius: 18, y: 8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .padding(.trailing, isPhone ? 90 : 100)
+                    .padding(.bottom, isPhone ? 168 : 130)
+                    .allowsHitTesting(false)
+                    .transition(.opacity.combined(with: .scale(scale: 0.88)))
+                    .zIndex(10)
+            }
+
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
                 VStack(spacing: 8) {
@@ -424,7 +445,8 @@ struct ContentView: View {
                     size: CGSize(width: 44, height: 62),
                     goToBookmark: { goToBookmark(at: bookmark.index) },
                     storeBookmark: { storeBookmark(at: bookmark.index) },
-                    removeBookmark: { removeBookmark(at: bookmark.index) }
+                    removeBookmark: { removeBookmark(at: bookmark.index) },
+                    preview: { bookmarkPreview = $0 }
                 )
                 .frame(width: 44, height: 62)
             }
@@ -454,7 +476,8 @@ struct ContentView: View {
                 size: CGSize(width: 40, height: 40),
                 goToBookmark: { },
                 storeBookmark: addBookmark,
-                removeBookmark: nil
+                removeBookmark: nil,
+                preview: { bookmarkPreview = $0 }
             )
             .frame(width: 40, height: 40)
         }
@@ -933,6 +956,7 @@ private struct BookmarkSlotButton: UIViewRepresentable {
     let goToBookmark: () -> Void
     let storeBookmark: () -> Void
     let removeBookmark: (() -> Void)?
+    let preview: (UIImage?) -> Void
 
     func makeUIView(context: Context) -> BookmarkSlotControl {
         BookmarkSlotControl(size: size)
@@ -946,7 +970,8 @@ private struct BookmarkSlotButton: UIViewRepresentable {
             thumbnail: thumbnail,
             goToBookmark: goToBookmark,
             storeBookmark: storeBookmark,
-            removeBookmark: removeBookmark
+            removeBookmark: removeBookmark,
+            preview: preview
         )
     }
 }
@@ -958,6 +983,7 @@ private final class BookmarkSlotControl: UIControl {
     private var goToBookmark: () -> Void = { }
     private var storeBookmark: () -> Void = { }
     private var removeBookmark: (() -> Void)?
+    private var preview: (UIImage?) -> Void = { _ in }
     private var didStoreDuringTouch = false
     private var didRemoveDuringTouch = false
     private var isAddControl = false
@@ -1042,11 +1068,13 @@ private final class BookmarkSlotControl: UIControl {
         thumbnail: UIImage?,
         goToBookmark: @escaping () -> Void,
         storeBookmark: @escaping () -> Void,
-        removeBookmark: (() -> Void)?
+        removeBookmark: (() -> Void)?,
+        preview: @escaping (UIImage?) -> Void
     ) {
         self.goToBookmark = goToBookmark
         self.storeBookmark = storeBookmark
         self.removeBookmark = removeBookmark
+        self.preview = preview
         label.text = title
         thumbnailView.image = thumbnail
         thumbnailView.isHidden = thumbnail == nil
@@ -1085,7 +1113,9 @@ private final class BookmarkSlotControl: UIControl {
         holdProgressLayer.strokeEnd = 1
         UIView.animate(withDuration: 0.5, delay: 0, options: [.curveLinear, .beginFromCurrentState]) {
             self.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.62)
-            self.transform = CGAffineTransform(scaleX: 1.8, y: 1.8)
+            if self.isAddControl {
+                self.transform = CGAffineTransform(scaleX: 1.8, y: 1.8)
+            }
         }
     }
 
@@ -1094,6 +1124,7 @@ private final class BookmarkSlotControl: UIControl {
     }
 
     private func releaseTension(recorded: Bool = false) {
+        preview(nil)
         holdProgressLayer.removeAllAnimations()
         UIView.animate(
             withDuration: 0.26,
@@ -1134,7 +1165,12 @@ private final class BookmarkSlotControl: UIControl {
             didStoreDuringTouch = false
             didRemoveDuringTouch = false
         }
-        guard !didStoreDuringTouch, !didRemoveDuringTouch else { return }
+        guard !didStoreDuringTouch, !didRemoveDuringTouch else {
+            if didStoreDuringTouch, !isAddControl {
+                releaseTension()
+            }
+            return
+        }
         releaseTension()
         goToBookmark()
     }
@@ -1148,19 +1184,19 @@ private final class BookmarkSlotControl: UIControl {
             return
         }
 
-        // A held card becomes a momentary page magnifier.  It is deliberately
-        // kept in the same control, so releasing it cannot alter the bookmark.
+        // The enlarged card is hosted above the reader, rather than in the
+        // rail, so its preview cannot be constrained by that small control.
         holdProgressLayer.removeAllAnimations()
         holdProgressLayer.opacity = 0
-        layer.zPosition = 100
         UIView.animate(
             withDuration: 0.18,
             delay: 0,
             options: [.beginFromCurrentState, .curveEaseOut]
         ) {
-            self.backgroundColor = UIColor.black.withAlphaComponent(0.9)
-            self.transform = CGAffineTransform(scaleX: 3.4, y: 3.4)
+            self.backgroundColor = self.mutedColor
+            self.transform = .identity
         }
+        preview(thumbnailView.image)
     }
 
     @objc private func panned(_ recognizer: UIPanGestureRecognizer) {
