@@ -45,6 +45,9 @@ struct ContentView: View {
         bookmarkPageIndices.enumerated().compactMap { index, pageIndex in
             pageIndex.map { (index, $0) }
         }
+        .sorted { lhs, rhs in
+            lhs.pageIndex == rhs.pageIndex ? lhs.index < rhs.index : lhs.pageIndex < rhs.pageIndex
+        }
     }
 
     private var maximumBookmarkRailButtons: Int {
