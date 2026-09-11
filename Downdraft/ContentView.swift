@@ -717,8 +717,12 @@ struct ContentView: View {
         navigate(to: pageIndex)
     }
 
-    private func storeBookmark(at index: Int) {
-        guard let document = selectedDocument else { return }
+    private func storeBookmark(at index: Int) -> Bool {
+        guard let document = selectedDocument,
+              document.bookmarkPageIndices.indices.contains(index) else { return false }
+        guard !document.bookmarkPageIndices.enumerated().contains(where: {
+            $0.offset != index && $0.element == document.lastPageIndex
+        }) else { return false }
         document.bookmarkPageIndices[index] = document.lastPageIndex
         bookmarkPageIndices[index] = document.lastPageIndex
         if let identity = document.readingStateIdentity {
@@ -731,10 +735,12 @@ struct ContentView: View {
             )
         }
         saveDocuments()
+        return true
     }
 
-    private func addBookmark() {
-        guard let document = selectedDocument else { return }
+    private func addBookmark() -> Bool {
+        guard let document = selectedDocument,
+              !document.bookmarkPageIndices.contains(document.lastPageIndex) else { return false }
         document.bookmarkPageIndices.append(document.lastPageIndex)
         bookmarkPageIndices = document.bookmarkPageIndices
         let index = document.bookmarkPageIndices.index(before: document.bookmarkPageIndices.endIndex)
@@ -748,6 +754,7 @@ struct ContentView: View {
             )
         }
         saveDocuments()
+        return true
     }
 
     private func removeBookmark(at index: Int) {
@@ -961,7 +968,7 @@ private struct BookmarkSlotButton: UIViewRepresentable {
     let thumbnail: UIImage?
     var size: CGSize = CGSize(width: 36, height: 36)
     let goToBookmark: () -> Void
-    let storeBookmark: () -> Void
+    let storeBookmark: () -> Bool
     let removeBookmark: (() -> Void)?
     let preview: (UIImage?) -> Void
 
@@ -988,7 +995,7 @@ private final class BookmarkSlotControl: UIControl {
     private let thumbnailView = UIImageView()
     private let holdProgressLayer = CAShapeLayer()
     private var goToBookmark: () -> Void = { }
-    private var storeBookmark: () -> Void = { }
+    private var storeBookmark: () -> Bool = { false }
     private var removeBookmark: (() -> Void)?
     private var preview: (UIImage?) -> Void = { _ in }
     private var didStoreDuringTouch = false
@@ -1074,7 +1081,7 @@ private final class BookmarkSlotControl: UIControl {
         isSet: Bool,
         thumbnail: UIImage?,
         goToBookmark: @escaping () -> Void,
-        storeBookmark: @escaping () -> Void,
+        storeBookmark: @escaping () -> Bool,
         removeBookmark: (() -> Void)?,
         preview: @escaping (UIImage?) -> Void
     ) {
@@ -1186,8 +1193,7 @@ private final class BookmarkSlotControl: UIControl {
         guard recognizer.state == .began else { return }
         didStoreDuringTouch = true
         guard !isAddControl else {
-            storeBookmark()
-            releaseTension(recorded: true)
+            releaseTension(recorded: storeBookmark())
             return
         }
 
