@@ -32,7 +32,10 @@ enum ReadingStateStore {
         }
 
         static func initial(pageIndex: Int, bookmarks: [Int?]) -> State {
-            let timestamp = Date()
+            // A fallback is only a local starting point while iCloud state is
+            // still arriving.  It must never outrank an actual reading event
+            // from another device merely because this app was opened later.
+            let timestamp = Date.distantPast
             let deviceID = ReadingStateStore.deviceID
             return State(
                 page: Page(index: pageIndex, modifiedAt: timestamp, deviceID: deviceID),
@@ -94,7 +97,10 @@ enum ReadingStateStore {
         case (nil, nil):
             resolved = State.initial(pageIndex: fallbackPageIndex, bookmarks: fallbackBookmarks)
         }
-        save(resolved, for: identity)
+        // Reading state must not itself publish to iCloud.  A device may have
+        // only a stale local fallback while a newer value is still being
+        // downloaded; writing here would overwrite that remote value.
+        saveLocal(resolved, for: identity)
         return resolved
     }
 
@@ -141,9 +147,18 @@ enum ReadingStateStore {
 
     private static func save(_ state: State, for identity: String) {
         guard let data = try? JSONEncoder().encode(state) else { return }
-        defaults.set(data, forKey: localKey(for: identity))
+        saveLocalData(data, for: identity)
         cloud.set(data, forKey: cloudKey(for: identity))
         cloud.synchronize()
+    }
+
+    private static func saveLocal(_ state: State, for identity: String) {
+        guard let data = try? JSONEncoder().encode(state) else { return }
+        saveLocalData(data, for: identity)
+    }
+
+    private static func saveLocalData(_ data: Data, for identity: String) {
+        defaults.set(data, forKey: localKey(for: identity))
     }
 
     private static func merged(_ lhs: State, _ rhs: State) -> State {
