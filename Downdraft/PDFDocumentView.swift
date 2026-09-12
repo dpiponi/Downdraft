@@ -81,26 +81,44 @@ struct PDFDocumentView: UIViewRepresentable {
         private var observedMotionRecognizers = Set<ObjectIdentifier>()
         private var observedPinchRecognizers = Set<ObjectIdentifier>()
         private var protectedPageIndex: Int?
-        private var ignoresTransientPageChanges = false
+        private var transientPageChangeTokens = Set<UUID>()
         var lastKnownPageIndex = 0
+
+        private var ignoresTransientPageChanges: Bool {
+            !transientPageChangeTokens.isEmpty
+        }
+
+        private func beginTransientPageChange() -> UUID {
+            let token = UUID()
+            transientPageChangeTokens.insert(token)
+            return token
+        }
+
+        private func endTransientPageChange(_ token: UUID) {
+            transientPageChangeTokens.remove(token)
+        }
+
+        private func validPageIndex(_ pageIndex: Int, in document: PDFDocument) -> Int? {
+            guard document.pageCount > 0 else { return nil }
+            return min(max(pageIndex, 0), document.pageCount - 1)
+        }
 
         func install(_ document: PDFDocument, at pageIndex: Int, in pdfView: PDFView) {
             // Assigning a PDFDocument always makes PDFKit briefly announce its
             // first page, even when we immediately go to a saved page.  That
             // announcement is setup noise, not reader navigation.
-            ignoresTransientPageChanges = true
+            let transientChange = beginTransientPageChange()
             observedPDFView = pdfView
-            lastKnownPageIndex = pageIndex
+            let restoredPageIndex = validPageIndex(pageIndex, in: document) ?? 0
+            lastKnownPageIndex = restoredPageIndex
             pdfView.document = document
-            if let page = document.page(at: pageIndex) {
+            if let page = document.page(at: restoredPageIndex) {
                 pdfView.go(to: page)
-            } else {
-                pdfView.goToFirstPage(nil)
             }
             loadedDocument = document
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                self.ignoresTransientPageChanges = false
+                self.endTransientPageChange(transientChange)
                 // PDFKit can finish its initial layout without a final
                 // page-change notification. Publish the settled visible page
                 // explicitly so a newly opened wide document can bookmark
@@ -185,17 +203,25 @@ struct PDFDocumentView: UIViewRepresentable {
             self.isLandscape = isLandscape
             self.displaysAsBook = displaysAsBook
             self.readsHorizontally = readsHorizontally
-            let pageIndex = pdfView.currentPage.flatMap { pdfView.document?.index(for: $0) }
-                ?? lastKnownPageIndex
+            // PDFKit may temporarily report page zero while rebuilding its
+            // private scroll view. The coordinator's last confirmed page is
+            // the only trustworthy position during a layout transaction.
+            let pageIndex = lastKnownPageIndex
+            let transientChange = beginTransientPageChange()
             UIView.performWithoutAnimation {
                 pdfView.displaysAsBook = displaysAsBook
                 pdfView.displayDirection = readsHorizontally ? .horizontal : .vertical
                 pdfView.displayMode = isLandscape ? .twoUpContinuous : .singlePageContinuous
                 pdfView.layoutIfNeeded()
             }
-            DispatchQueue.main.async { [weak pdfView] in
-                guard let pdfView,
-                      let page = pdfView.document?.page(at: pageIndex) else { return }
+            DispatchQueue.main.async { [weak self, weak pdfView] in
+                guard let self, let pdfView,
+                      let document = pdfView.document,
+                      let restoredPageIndex = self.validPageIndex(pageIndex, in: document),
+                      let page = document.page(at: restoredPageIndex) else {
+                    self?.endTransientPageChange(transientChange)
+                    return
+                }
                 pdfView.layoutIfNeeded()
                 if self.isReaderFocused {
                     pdfView.autoScales = false
@@ -204,6 +230,13 @@ struct PDFDocumentView: UIViewRepresentable {
                     pdfView.autoScales = true
                 }
                 pdfView.go(to: page)
+                DispatchQueue.main.async { [weak self, weak pdfView] in
+                    guard let self else { return }
+                    self.endTransientPageChange(transientChange)
+                    if let pdfView {
+                        self.publishReadingPage(in: pdfView, fallback: restoredPageIndex)
+                    }
+                }
             }
         }
 
