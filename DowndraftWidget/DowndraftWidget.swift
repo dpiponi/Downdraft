@@ -105,6 +105,12 @@ private struct RecentDocumentsWidgetView: View {
 private struct ContinueReadingWidgetView: View {
     let document: RecentDocument?
 
+    private var displayTitle: String {
+        guard let document else { return "" }
+        let name = document.displayName
+        return name.lowercased().hasSuffix(".pdf") ? String(name.dropLast(4)) : name
+    }
+
     var body: some View {
         if let document {
             Link(destination: URL(string: "downdraft://open?id=\(document.id.uuidString)")!) {
@@ -113,15 +119,12 @@ private struct ContinueReadingWidgetView: View {
                         .font(.system(size: 30, weight: .semibold, design: .serif))
                         .widgetAccentable()
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Continue Reading")
+                        Text(document.lastPageIndex.map { "Continue Reading · Page \($0 + 1)" } ?? "Continue Reading")
                             .font(.caption2)
-                        Text(document.displayName)
+                        Text(displayTitle)
                             .font(.headline)
-                            .lineLimit(1)
-                        if let pageIndex = document.lastPageIndex {
-                            Text("Page \(pageIndex + 1)")
-                                .font(.caption)
-                        }
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.8)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
