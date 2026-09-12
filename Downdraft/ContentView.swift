@@ -209,11 +209,6 @@ struct ContentView: View {
                 onPageChanged: { pageIndex in
                     updatePage(pageIndex, for: document.id)
                 },
-                onPageLongPress: { pageIndex in
-                    if addBookmark(on: pageIndex) {
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    }
-                },
                 onCenterTap: {
                     toggleReaderFocus()
                 },
@@ -744,20 +739,14 @@ struct ContentView: View {
     }
 
     private func addBookmark() -> Bool {
-        guard let document = selectedDocument else { return false }
-        return addBookmark(on: document.lastPageIndex)
-    }
-
-    private func addBookmark(on pageIndex: Int) -> Bool {
         guard let document = selectedDocument,
-              document.pdfDocument?.page(at: pageIndex) != nil,
-              !document.bookmarkPageIndices.contains(pageIndex) else { return false }
-        document.bookmarkPageIndices.append(pageIndex)
+              !document.bookmarkPageIndices.contains(document.lastPageIndex) else { return false }
+        document.bookmarkPageIndices.append(document.lastPageIndex)
         bookmarkPageIndices = document.bookmarkPageIndices
         let index = document.bookmarkPageIndices.index(before: document.bookmarkPageIndices.endIndex)
         if let identity = document.readingStateIdentity {
             ReadingStateStore.saveBookmark(
-                pageIndex,
+                document.lastPageIndex,
                 at: index,
                 for: identity,
                 fallbackPageIndex: document.lastPageIndex,
