@@ -9,6 +9,7 @@ struct RecentDocument: Codable, Identifiable, Equatable {
     let displayName: String
     let bookmarkData: Data
     let thumbnailData: Data?
+    let lastPageIndex: Int?
 }
 
 enum RecentDocumentStore {
@@ -33,6 +34,7 @@ enum RecentDocumentStore {
         name: String,
         bookmarkData: Data,
         document: PDFDocument?,
+        lastPageIndex: Int? = nil,
         thumbnailCacheIdentity: String? = nil
     ) {
         let thumbnailData = thumbnailData(for: document?.page(at: 0))
@@ -47,12 +49,37 @@ enum RecentDocumentStore {
             id: id,
             displayName: name,
             bookmarkData: bookmarkData,
-            thumbnailData: thumbnailData
+            thumbnailData: thumbnailData,
+            lastPageIndex: lastPageIndex
         )
         var updated = documents.filter { $0.bookmarkData != bookmarkData }
         updated.insert(recentDocument, at: 0)
         let encoder = JSONEncoder()
         guard let data = try? encoder.encode(Array(updated.prefix(4))) else { return }
+        if let url = recentDocumentsURL {
+            try? data.write(to: url, options: .atomic)
+        }
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    static func updateReadingPosition(bookmarkData: Data, pageIndex: Int) {
+        var updated = documents
+        guard let index = updated.firstIndex(where: { $0.bookmarkData == bookmarkData }) else { return }
+        let document = updated[index]
+        guard document.lastPageIndex != pageIndex else { return }
+        updated[index] = RecentDocument(
+            id: document.id,
+            displayName: document.displayName,
+            bookmarkData: document.bookmarkData,
+            thumbnailData: document.thumbnailData,
+            lastPageIndex: pageIndex
+        )
+        write(updated)
+    }
+
+    private static func write(_ documents: [RecentDocument]) {
+        let encoder = JSONEncoder()
+        guard let data = try? encoder.encode(Array(documents.prefix(4))) else { return }
         if let url = recentDocumentsURL {
             try? data.write(to: url, options: .atomic)
         }

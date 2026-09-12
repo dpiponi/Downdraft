@@ -675,6 +675,7 @@ struct ContentView: View {
             name: document.displayName,
             bookmarkData: document.bookmarkData,
             document: document.pdfDocument,
+            lastPageIndex: document.lastPageIndex,
             thumbnailCacheIdentity: document.readingStateIdentity
         )
         outlineDestination = nil
@@ -808,6 +809,10 @@ struct ContentView: View {
                 fallbackBookmarks: document.bookmarkPageIndices
             )
         }
+        RecentDocumentStore.updateReadingPosition(
+            bookmarkData: document.bookmarkData,
+            pageIndex: pageIndex
+        )
         if id == selectedDocumentID {
             scrubbedPageIndex = pageIndex
             requestedPageIndex = nil
@@ -883,6 +888,10 @@ struct ContentView: View {
             scrubbedPageIndex = state.page.index
             scrubberRevision += 1
             requestedPageIndex = state.page.index
+            RecentDocumentStore.updateReadingPosition(
+                bookmarkData: document.bookmarkData,
+                pageIndex: state.page.index
+            )
         }
         saveDocuments()
     }

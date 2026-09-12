@@ -6,6 +6,7 @@ private struct RecentDocument: Codable, Identifiable {
     let displayName: String
     let bookmarkData: Data
     let thumbnailData: Data?
+    let lastPageIndex: Int?
 }
 
 private struct RecentDocumentProvider: TimelineProvider {
@@ -42,7 +43,7 @@ struct DowndraftWidget: Widget {
         }
         .configurationDisplayName("Recent PDFs")
         .description("Open one of your recently read PDFs.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular])
     }
 }
 
@@ -60,7 +61,9 @@ private struct RecentDocumentsWidgetView: View {
     }
 
     var body: some View {
-        if documents.isEmpty {
+        if family == .accessoryRectangular {
+            ContinueReadingWidgetView(document: documents.first)
+        } else if documents.isEmpty {
             ContentUnavailableView("No Recent PDFs", systemImage: "doc.richtext")
                 .containerBackground(.fill.tertiary, for: .widget)
         } else {
@@ -95,6 +98,38 @@ private struct RecentDocumentsWidgetView: View {
                 }
             }
             .containerBackground(.fill.tertiary, for: .widget)
+        }
+    }
+}
+
+private struct ContinueReadingWidgetView: View {
+    let document: RecentDocument?
+
+    var body: some View {
+        if let document {
+            Link(destination: URL(string: "downdraft://open?id=\(document.id.uuidString)")!) {
+                HStack(spacing: 9) {
+                    Text("§")
+                        .font(.system(size: 30, weight: .semibold, design: .serif))
+                        .widgetAccentable()
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Continue Reading")
+                            .font(.caption2)
+                        Text(document.displayName)
+                            .font(.headline)
+                            .lineLimit(1)
+                        if let pageIndex = document.lastPageIndex {
+                            Text("Page \(pageIndex + 1)")
+                                .font(.caption)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .containerBackground(for: .widget) { Color.clear }
+        } else {
+            Label("Open a PDF in Downdraft", systemImage: "doc.richtext")
+                .containerBackground(for: .widget) { Color.clear }
         }
     }
 }
