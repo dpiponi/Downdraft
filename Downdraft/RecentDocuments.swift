@@ -10,6 +10,7 @@ struct RecentDocument: Codable, Identifiable, Equatable {
     let bookmarkData: Data
     let thumbnailData: Data?
     let lastPageIndex: Int?
+    let pageCount: Int?
 }
 
 enum RecentDocumentStore {
@@ -35,6 +36,7 @@ enum RecentDocumentStore {
         bookmarkData: Data,
         document: PDFDocument?,
         lastPageIndex: Int? = nil,
+        pageCount: Int? = nil,
         thumbnailCacheIdentity: String? = nil
     ) {
         let thumbnailData = thumbnailData(for: document?.page(at: 0))
@@ -50,7 +52,8 @@ enum RecentDocumentStore {
             displayName: name,
             bookmarkData: bookmarkData,
             thumbnailData: thumbnailData,
-            lastPageIndex: lastPageIndex
+            lastPageIndex: lastPageIndex,
+            pageCount: pageCount
         )
         var updated = documents.filter { $0.bookmarkData != bookmarkData }
         updated.insert(recentDocument, at: 0)
@@ -62,17 +65,19 @@ enum RecentDocumentStore {
         WidgetCenter.shared.reloadAllTimelines()
     }
 
-    static func updateReadingPosition(bookmarkData: Data, pageIndex: Int) {
+    static func updateReadingPosition(bookmarkData: Data, pageIndex: Int, pageCount: Int? = nil) {
         var updated = documents
         guard let index = updated.firstIndex(where: { $0.bookmarkData == bookmarkData }) else { return }
         let document = updated[index]
-        guard document.lastPageIndex != pageIndex else { return }
+        let resolvedPageCount = pageCount ?? document.pageCount
+        guard document.lastPageIndex != pageIndex || document.pageCount != resolvedPageCount else { return }
         updated[index] = RecentDocument(
             id: document.id,
             displayName: document.displayName,
             bookmarkData: document.bookmarkData,
             thumbnailData: document.thumbnailData,
-            lastPageIndex: pageIndex
+            lastPageIndex: pageIndex,
+            pageCount: resolvedPageCount
         )
         write(updated)
     }

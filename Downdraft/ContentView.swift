@@ -709,6 +709,7 @@ struct ContentView: View {
             bookmarkData: document.bookmarkData,
             document: document.pdfDocument,
             lastPageIndex: document.lastPageIndex,
+            pageCount: document.pdfDocument?.pageCount,
             thumbnailCacheIdentity: document.readingStateIdentity
         )
         outlineDestination = nil
@@ -861,7 +862,8 @@ struct ContentView: View {
         }
         RecentDocumentStore.updateReadingPosition(
             bookmarkData: document.bookmarkData,
-            pageIndex: pageIndex
+            pageIndex: pageIndex,
+            pageCount: document.pdfDocument?.pageCount
         )
         if id == selectedDocumentID {
             document.lastSelectedAt = Date()
@@ -941,7 +943,8 @@ struct ContentView: View {
             requestedPageIndex = state.page.index
             RecentDocumentStore.updateReadingPosition(
                 bookmarkData: document.bookmarkData,
-                pageIndex: state.page.index
+                pageIndex: state.page.index,
+                pageCount: document.pdfDocument?.pageCount
             )
         }
         saveDocuments()

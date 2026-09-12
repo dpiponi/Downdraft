@@ -7,6 +7,7 @@ private struct RecentDocument: Codable, Identifiable {
     let bookmarkData: Data
     let thumbnailData: Data?
     let lastPageIndex: Int?
+    let pageCount: Int?
 }
 
 private struct RecentDocumentProvider: TimelineProvider {
@@ -123,6 +124,16 @@ private struct ContinueReadingWidgetView: View {
                             .font(.headline)
                             .lineLimit(2)
                             .minimumScaleFactor(0.8)
+                        if let pageIndex = document.lastPageIndex,
+                           let pageCount = document.pageCount,
+                           pageCount > 0 {
+                            ProgressView(
+                                value: Double(min(pageIndex + 1, pageCount)),
+                                total: Double(pageCount)
+                            )
+                            .progressViewStyle(.linear)
+                            .widgetAccentable()
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
