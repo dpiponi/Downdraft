@@ -319,7 +319,7 @@ struct ContentView: View {
                     // stack grows upward while the add control stays put.
                     .padding(.trailing, 28)
                 }
-                .padding(.bottom, isPhone ? 176 : 126)
+                .padding(.bottom, isPhone ? 176 : 144)
             }
             .transition(.move(edge: .trailing).combined(with: .opacity))
 
