@@ -695,6 +695,7 @@ struct ContentView: View {
             return
         }
         restoreSharedReadingState(for: document)
+        document.lastSelectedAt = Date()
         selectedDocumentID = id
         treatsFirstPageAsCover = document.displaysAsBook
         readsHorizontally = document.readsHorizontally
@@ -1430,6 +1431,7 @@ private final class OpenDocument: Identifiable {
     var displaysAsBook: Bool
     var readsHorizontally: Bool
     var bookmarkPageIndices: [Int?]
+    var lastSelectedAt: Date
     private var isAccessingFile: Bool
     private var navigationHistory: [Int]
     private var navigationHistoryIndex: Int
@@ -1457,6 +1459,7 @@ private final class OpenDocument: Identifiable {
         displaysAsBook: Bool = true,
         readsHorizontally: Bool = false,
         bookmarkPageIndices: [Int?] = [],
+        lastSelectedAt: Date = .distantPast,
         isAccessingFile: Bool
     ) {
         self.url = url
@@ -1467,6 +1470,7 @@ private final class OpenDocument: Identifiable {
         self.displaysAsBook = displaysAsBook
         self.readsHorizontally = readsHorizontally
         self.bookmarkPageIndices = bookmarkPageIndices
+        self.lastSelectedAt = lastSelectedAt
         self.isAccessingFile = isAccessingFile
         self.navigationHistory = [lastPageIndex]
         self.navigationHistoryIndex = 0
@@ -1571,6 +1575,7 @@ private final class OpenDocument: Identifiable {
         let displaysAsBook: Bool?
         let readsHorizontally: Bool?
         let bookmarkPageIndices: [Int?]?
+        let lastSelectedAt: Date?
     }
 
     private static let savedDocumentsKey = "openDocuments"
@@ -1585,7 +1590,8 @@ private final class OpenDocument: Identifiable {
                 lastPageIndex: $0.lastPageIndex,
                 displaysAsBook: $0.displaysAsBook,
                 readsHorizontally: $0.readsHorizontally,
-                bookmarkPageIndices: $0.bookmarkPageIndices
+                bookmarkPageIndices: $0.bookmarkPageIndices,
+                lastSelectedAt: $0.lastSelectedAt
             )
         }
         guard let data = try? JSONEncoder().encode(savedDocuments) else { return }
@@ -1618,6 +1624,7 @@ private final class OpenDocument: Identifiable {
                 displaysAsBook: savedDocument.displaysAsBook ?? true,
                 readsHorizontally: savedDocument.readsHorizontally ?? false,
                 bookmarkPageIndices: savedDocument.bookmarkPageIndices ?? [],
+                lastSelectedAt: savedDocument.lastSelectedAt ?? .distantPast,
                 isAccessingFile: false
             )
         }
@@ -1644,6 +1651,17 @@ private struct DocumentSwitcherView: View {
         min(640, max(220, CGFloat(documents.count) * 68 + 72))
     }
 
+    private var documentsByRecency: [OpenDocument] {
+        documents.enumerated()
+            .sorted { lhs, rhs in
+                if lhs.element.lastSelectedAt != rhs.element.lastSelectedAt {
+                    return lhs.element.lastSelectedAt > rhs.element.lastSelectedAt
+                }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
+    }
+
     private func thumbnailData(for document: OpenDocument) -> Data? {
         DocumentThumbnailCache.data(
             contentIdentity: document.readingStateIdentity,
@@ -1654,7 +1672,7 @@ private struct DocumentSwitcherView: View {
     var body: some View {
         NavigationStack {
             List {
-                ForEach(documents) { document in
+                ForEach(documentsByRecency) { document in
                     let isSelected = document.id == selectedID
                     HStack(spacing: 12) {
                         Button {
