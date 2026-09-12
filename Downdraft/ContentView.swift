@@ -20,6 +20,7 @@ struct ContentView: View {
     @State private var treatsFirstPageAsCover = true
     @State private var readsHorizontally = false
     @State private var scrubbedPageIndex = 0
+    @State private var pdfKitCurrentPageIndex: Int?
     @State private var requestedPageIndex: Int?
     @State private var bookmarkPageIndices: [Int?] = []
     // Forces SwiftUI to refresh history-button availability after mutating a
@@ -210,6 +211,10 @@ struct ContentView: View {
                 requestedPageIndex: isSelected ? requestedPageIndex : nil,
                 onPageChanged: { pageIndex in
                     updatePage(pageIndex, for: document.id)
+                },
+                onPDFKitCurrentPageChanged: { pageIndex in
+                    guard document.id == selectedDocumentID else { return }
+                    pdfKitCurrentPageIndex = pageIndex
                 },
                 onCenterTap: {
                     toggleReaderFocus()
@@ -694,6 +699,7 @@ struct ContentView: View {
         treatsFirstPageAsCover = document.displaysAsBook
         readsHorizontally = document.readsHorizontally
         scrubbedPageIndex = document.lastPageIndex
+        pdfKitCurrentPageIndex = document.lastPageIndex
         requestedPageIndex = nil
         bookmarkPageIndices = document.bookmarkPageIndices
         RecentDocumentStore.record(
@@ -782,14 +788,15 @@ struct ContentView: View {
     }
 
     private func addBookmark() -> Bool {
-        guard let document = selectedDocument,
-              !document.bookmarkPageIndices.contains(document.lastPageIndex) else { return false }
-        document.bookmarkPageIndices.append(document.lastPageIndex)
+        guard let document = selectedDocument else { return false }
+        let pageIndex = pdfKitCurrentPageIndex ?? document.lastPageIndex
+        guard !document.bookmarkPageIndices.contains(pageIndex) else { return false }
+        document.bookmarkPageIndices.append(pageIndex)
         bookmarkPageIndices = document.bookmarkPageIndices
         let index = document.bookmarkPageIndices.index(before: document.bookmarkPageIndices.endIndex)
         if let identity = document.readingStateIdentity {
             ReadingStateStore.saveBookmark(
-                document.lastPageIndex,
+                pageIndex,
                 at: index,
                 for: identity,
                 fallbackPageIndex: document.lastPageIndex,

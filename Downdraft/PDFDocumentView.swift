@@ -13,6 +13,7 @@ struct PDFDocumentView: UIViewRepresentable {
     var outlineDestination: PDFDestination?
     var requestedPageIndex: Int?
     var onPageChanged: (Int) -> Void = { _ in }
+    var onPDFKitCurrentPageChanged: (Int) -> Void = { _ in }
     var onCenterTap: () -> Void = { }
     var onLinkNavigation: (Int, Int) -> Void = { _, _ in }
 
@@ -29,6 +30,7 @@ struct PDFDocumentView: UIViewRepresentable {
 
     func updateUIView(_ pdfView: PDFView, context: Context) {
         context.coordinator.onPageChanged = onPageChanged
+        context.coordinator.onPDFKitCurrentPageChanged = onPDFKitCurrentPageChanged
         context.coordinator.onCenterTap = onCenterTap
         context.coordinator.onLinkNavigation = onLinkNavigation
         context.coordinator.disableDoubleTapZoom(in: pdfView)
@@ -61,6 +63,7 @@ struct PDFDocumentView: UIViewRepresentable {
     final class Coordinator: NSObject {
         var loadedDocument: PDFDocument?
         var onPageChanged: (Int) -> Void = { _ in }
+        var onPDFKitCurrentPageChanged: (Int) -> Void = { _ in }
         var onCenterTap: () -> Void = { }
         var onLinkNavigation: (Int, Int) -> Void = { _, _ in }
         private var isReaderFocused = false
@@ -294,6 +297,9 @@ struct PDFDocumentView: UIViewRepresentable {
 
         private func publishReadingPage(in pdfView: PDFView, fallback: Int? = nil) {
             guard let document = pdfView.document else { return }
+            if let currentPage = pdfView.currentPage {
+                onPDFKitCurrentPageChanged(document.index(for: currentPage))
+            }
             let visiblePageFrames = pdfView.visiblePages.map { page in
                 (
                     index: document.index(for: page),
