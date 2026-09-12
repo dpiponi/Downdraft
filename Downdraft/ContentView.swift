@@ -864,6 +864,7 @@ struct ContentView: View {
             pageIndex: pageIndex
         )
         if id == selectedDocumentID {
+            document.lastSelectedAt = Date()
             scrubbedPageIndex = pageIndex
             requestedPageIndex = nil
         }
