@@ -119,8 +119,6 @@ private struct ContinueReadingWidgetView: View {
                         .font(.system(size: 30, weight: .semibold, design: .serif))
                         .widgetAccentable()
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(document.lastPageIndex.map { "Continue Reading · Page \($0 + 1)" } ?? "Continue Reading")
-                            .font(.caption2)
                         Text(displayTitle)
                             .font(.headline)
                             .lineLimit(2)
