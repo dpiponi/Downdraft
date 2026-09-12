@@ -1699,7 +1699,6 @@ private struct DocumentSwitcherView: View {
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
-            .navigationTitle("Open PDFs")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {
