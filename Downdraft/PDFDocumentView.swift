@@ -12,6 +12,7 @@ struct PDFDocumentView: UIViewRepresentable {
     var outlineDestination: PDFDestination?
     var requestedPageIndex: Int?
     var onPageChanged: (Int) -> Void = { _ in }
+    var onPageLongPress: (Int) -> Void = { _ in }
     var onCenterTap: () -> Void = { }
     var onLinkNavigation: (Int, Int) -> Void = { _, _ in }
 
@@ -28,6 +29,7 @@ struct PDFDocumentView: UIViewRepresentable {
 
     func updateUIView(_ pdfView: PDFView, context: Context) {
         context.coordinator.onPageChanged = onPageChanged
+        context.coordinator.onPageLongPress = onPageLongPress
         context.coordinator.onCenterTap = onCenterTap
         context.coordinator.onLinkNavigation = onLinkNavigation
         context.coordinator.disableDoubleTapZoom(in: pdfView)
@@ -59,6 +61,7 @@ struct PDFDocumentView: UIViewRepresentable {
     final class Coordinator: NSObject {
         var loadedDocument: PDFDocument?
         var onPageChanged: (Int) -> Void = { _ in }
+        var onPageLongPress: (Int) -> Void = { _ in }
         var onCenterTap: () -> Void = { }
         var onLinkNavigation: (Int, Int) -> Void = { _, _ in }
         private var isReaderFocused = false
@@ -118,6 +121,12 @@ struct PDFDocumentView: UIViewRepresentable {
             tapGesture.delegate = self
             pdfView.addGestureRecognizer(tapGesture)
             readerTapGesture = tapGesture
+
+            let longPress = UILongPressGestureRecognizer(target: self, action: #selector(readerLongPressed(_:)))
+            longPress.minimumPressDuration = 0.5
+            longPress.cancelsTouchesInView = true
+            longPress.delegate = self
+            pdfView.addGestureRecognizer(longPress)
         }
 
         func startObservingSearchHighlightDismissal(in pdfView: PDFView) {
@@ -344,6 +353,19 @@ struct PDFDocumentView: UIViewRepresentable {
             }
         }
 
+        @objc private func readerLongPressed(_ recognizer: UILongPressGestureRecognizer) {
+            guard recognizer.state == .began,
+                  let pdfView = recognizer.view as? PDFView,
+                  let document = pdfView.document else { return }
+            // A completed long press must not also be interpreted as the
+            // reader's ordinary single tap when the finger is lifted.
+            readerTapGesture?.isEnabled = false
+            readerTapGesture?.isEnabled = true
+            let location = recognizer.location(in: pdfView)
+            guard let page = pdfView.page(for: location, nearest: false) else { return }
+            onPageLongPress(document.index(for: page))
+        }
+
         @objc private func readerMotionBegan(_ recognizer: UIGestureRecognizer) {
             guard recognizer.state == .began || recognizer.state == .changed else { return }
             pendingSearchHighlight = nil
@@ -447,6 +469,6 @@ private final class SearchMatchOverlayView: UIView {
 
 extension PDFDocumentView.Coordinator: UIGestureRecognizerDelegate {
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        gestureRecognizer is UITapGestureRecognizer
+        gestureRecognizer is UITapGestureRecognizer || gestureRecognizer is UILongPressGestureRecognizer
     }
 }
