@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var isShowingMetadata = false
     @State private var outlineDestination: PDFDestination?
     @State private var treatsFirstPageAsCover = true
+    @State private var readsHorizontally = false
     @State private var scrubbedPageIndex = 0
     @State private var requestedPageIndex: Int?
     @State private var bookmarkPageIndices: [Int?] = []
@@ -203,6 +204,7 @@ struct ContentView: View {
                 isReaderFocused: isReaderFocused,
                 isLandscape: !isPhone && isLandscapeInterface,
                 displaysAsBook: treatsFirstPageAsCover,
+                readsHorizontally: readsHorizontally,
                 searchSelection: isSelected ? currentSearchSelection : nil,
                 outlineDestination: isSelected ? outlineDestination : nil,
                 requestedPageIndex: isSelected ? requestedPageIndex : nil,
@@ -395,14 +397,37 @@ struct ContentView: View {
                         .contentShape(Rectangle())
                 }
                 .accessibilityLabel("PDF information")
-                Button {
-                    setFirstPageCover(!treatsFirstPageAsCover)
+                Menu {
+                    Section("First Page") {
+                        Button {
+                            setFirstPageCover(true)
+                        } label: {
+                            layoutMenuLabel("First page alone", selected: treatsFirstPageAsCover)
+                        }
+                        Button {
+                            setFirstPageCover(false)
+                        } label: {
+                            layoutMenuLabel("First page in spread", selected: !treatsFirstPageAsCover)
+                        }
+                    }
+                    Section("Reading Direction") {
+                        Button {
+                            setReadingDirection(horizontal: false)
+                        } label: {
+                            layoutMenuLabel("Scroll vertically", selected: !readsHorizontally)
+                        }
+                        Button {
+                            setReadingDirection(horizontal: true)
+                        } label: {
+                            layoutMenuLabel("Scroll horizontally", selected: readsHorizontally)
+                        }
+                    }
                 } label: {
                     Image(systemName: treatsFirstPageAsCover ? "rectangle.split.2x1" : "rectangle")
                         .frame(width: 48, height: 48)
                         .contentShape(Rectangle())
                 }
-                .accessibilityLabel("Toggle facing-page cover")
+                .accessibilityLabel("Reader layout")
             } else {
                 Button { isShowingFilePicker = true } label: {
                     Image(systemName: "folder")
@@ -667,6 +692,7 @@ struct ContentView: View {
         restoreSharedReadingState(for: document)
         selectedDocumentID = id
         treatsFirstPageAsCover = document.displaysAsBook
+        readsHorizontally = document.readsHorizontally
         scrubbedPageIndex = document.lastPageIndex
         requestedPageIndex = nil
         bookmarkPageIndices = document.bookmarkPageIndices
@@ -710,6 +736,22 @@ struct ContentView: View {
         treatsFirstPageAsCover = value
         selectedDocument?.displaysAsBook = value
         saveDocuments()
+    }
+
+    private func setReadingDirection(horizontal: Bool) {
+        readsHorizontally = horizontal
+        selectedDocument?.readsHorizontally = horizontal
+        saveDocuments()
+    }
+
+    private func layoutMenuLabel(_ title: String, selected: Bool) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            if selected {
+                Image(systemName: "checkmark")
+            }
+        }
     }
 
     private func goToBookmark(at index: Int) {
@@ -1379,6 +1421,7 @@ private final class OpenDocument: Identifiable {
     let originalURLString: String
     var lastPageIndex: Int
     var displaysAsBook: Bool
+    var readsHorizontally: Bool
     var bookmarkPageIndices: [Int?]
     private var isAccessingFile: Bool
     private var navigationHistory: [Int]
@@ -1405,6 +1448,7 @@ private final class OpenDocument: Identifiable {
         originalURLString: String,
         lastPageIndex: Int = 0,
         displaysAsBook: Bool = true,
+        readsHorizontally: Bool = false,
         bookmarkPageIndices: [Int?] = [],
         isAccessingFile: Bool
     ) {
@@ -1414,6 +1458,7 @@ private final class OpenDocument: Identifiable {
         self.originalURLString = originalURLString
         self.lastPageIndex = lastPageIndex
         self.displaysAsBook = displaysAsBook
+        self.readsHorizontally = readsHorizontally
         self.bookmarkPageIndices = bookmarkPageIndices
         self.isAccessingFile = isAccessingFile
         self.navigationHistory = [lastPageIndex]
@@ -1517,6 +1562,7 @@ private final class OpenDocument: Identifiable {
         let originalURLString: String?
         let lastPageIndex: Int
         let displaysAsBook: Bool?
+        let readsHorizontally: Bool?
         let bookmarkPageIndices: [Int?]?
     }
 
@@ -1531,6 +1577,7 @@ private final class OpenDocument: Identifiable {
                 originalURLString: $0.originalURLString,
                 lastPageIndex: $0.lastPageIndex,
                 displaysAsBook: $0.displaysAsBook,
+                readsHorizontally: $0.readsHorizontally,
                 bookmarkPageIndices: $0.bookmarkPageIndices
             )
         }
@@ -1562,6 +1609,7 @@ private final class OpenDocument: Identifiable {
                 originalURLString: savedDocument.originalURLString ?? "",
                 lastPageIndex: savedDocument.lastPageIndex,
                 displaysAsBook: savedDocument.displaysAsBook ?? true,
+                readsHorizontally: savedDocument.readsHorizontally ?? false,
                 bookmarkPageIndices: savedDocument.bookmarkPageIndices ?? [],
                 isAccessingFile: false
             )

@@ -8,6 +8,7 @@ struct PDFDocumentView: UIViewRepresentable {
     var isReaderFocused = false
     var isLandscape = false
     var displaysAsBook = true
+    var readsHorizontally = false
     var searchSelection: PDFSelection?
     var outlineDestination: PDFDestination?
     var requestedPageIndex: Int?
@@ -46,6 +47,7 @@ struct PDFDocumentView: UIViewRepresentable {
         context.coordinator.updatePageLayout(
             isLandscape: isLandscape,
             displaysAsBook: displaysAsBook,
+            readsHorizontally: readsHorizontally,
             in: pdfView
         )
         context.coordinator.updateReaderFocus(isReaderFocused)
@@ -64,6 +66,7 @@ struct PDFDocumentView: UIViewRepresentable {
         private var isReaderFocused = false
         private var isLandscape = false
         private var displaysAsBook = false
+        private var readsHorizontally = false
         private var displayedSearchSelection: PDFSelection?
         private var pendingSearchSelection: PDFSelection?
         private var pendingSearchHighlight: PDFSelection?
@@ -167,14 +170,23 @@ struct PDFDocumentView: UIViewRepresentable {
             // cause a PDFKit resize or a compensating navigation.
         }
 
-        func updatePageLayout(isLandscape: Bool, displaysAsBook: Bool, in pdfView: PDFView) {
-            guard self.isLandscape != isLandscape || self.displaysAsBook != displaysAsBook else { return }
+        func updatePageLayout(
+            isLandscape: Bool,
+            displaysAsBook: Bool,
+            readsHorizontally: Bool,
+            in pdfView: PDFView
+        ) {
+            guard self.isLandscape != isLandscape
+                    || self.displaysAsBook != displaysAsBook
+                    || self.readsHorizontally != readsHorizontally else { return }
             self.isLandscape = isLandscape
             self.displaysAsBook = displaysAsBook
+            self.readsHorizontally = readsHorizontally
             let pageIndex = pdfView.currentPage.flatMap { pdfView.document?.index(for: $0) }
                 ?? lastKnownPageIndex
             UIView.performWithoutAnimation {
                 pdfView.displaysAsBook = displaysAsBook
+                pdfView.displayDirection = readsHorizontally ? .horizontal : .vertical
                 pdfView.displayMode = isLandscape ? .twoUpContinuous : .singlePageContinuous
                 pdfView.layoutIfNeeded()
             }
@@ -288,16 +300,25 @@ struct PDFDocumentView: UIViewRepresentable {
                     frame: pdfView.convert(page.bounds(for: .cropBox), from: page)
                 )
             }
-            // Prefer the first page whose top edge actually begins in the
-            // viewport.  A page with only its final few points visible above
-            // the viewport should not become the bookmark target.
+            // Prefer the first page whose leading edge actually begins in
+            // the viewport. A page with only its final few points visible
+            // before that edge should not become the bookmark target.
             let firstPageStartingInView: Int? = visiblePageFrames
-                .filter { $0.frame.minY >= pdfView.bounds.minY - 1 && $0.frame.minY < pdfView.bounds.maxY }
+                .filter {
+                    let leadingEdge = readsHorizontally ? $0.frame.minX : $0.frame.minY
+                    let viewportStart = readsHorizontally ? pdfView.bounds.minX : pdfView.bounds.minY
+                    let viewportEnd = readsHorizontally ? pdfView.bounds.maxX : pdfView.bounds.maxY
+                    return leadingEdge >= viewportStart - 1 && leadingEdge < viewportEnd
+                }
                 .min {
-                    if abs($0.frame.minY - $1.frame.minY) > 1 {
-                        return $0.frame.minY < $1.frame.minY
+                    let leftLeadingEdge = readsHorizontally ? $0.frame.minX : $0.frame.minY
+                    let rightLeadingEdge = readsHorizontally ? $1.frame.minX : $1.frame.minY
+                    if abs(leftLeadingEdge - rightLeadingEdge) > 1 {
+                        return leftLeadingEdge < rightLeadingEdge
                     }
-                    return $0.frame.minX < $1.frame.minX
+                    let leftCrossEdge = readsHorizontally ? $0.frame.minY : $0.frame.minX
+                    let rightCrossEdge = readsHorizontally ? $1.frame.minY : $1.frame.minX
+                    return leftCrossEdge < rightCrossEdge
                 }
                 .map(\.index)
             let readingPageIndex = firstPageStartingInView
