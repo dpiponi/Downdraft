@@ -456,10 +456,15 @@ struct ContentView: View {
                 }
                 .accessibilityLabel("Search")
                 if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
-                    Menu("More", systemImage: "ellipsis.circle") {
+                    Menu {
                         Button("Contents", systemImage: "list.bullet") { isShowingContents = true }
                         Button("PDF Information", systemImage: "info.circle") { isShowingMetadata = true }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
+                    .accessibilityLabel("More options")
                 } else {
                     Button { isShowingMetadata = true } label: {
                         Image(systemName: "info.circle")
