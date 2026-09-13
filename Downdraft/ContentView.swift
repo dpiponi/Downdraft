@@ -288,27 +288,46 @@ struct ContentView: View {
                 // point within it is UI space and must not fall through to
                 // the gesture-heavy PDFView underneath.
                 Color.black.opacity(0.001)
-                    .frame(height: isPhone ? 170 : 140)
+                    .frame(height: isPhone ? 180 : 140)
                     .contentShape(Rectangle())
                     .onTapGesture { }
 
                 VStack(spacing: 0) {
-                    HStack(alignment: .center, spacing: 12) {
-                        documentMenu
-                            .frame(width: 48, height: 48)
-                            .background(.black.opacity(0.001), in: Circle())
+                    if isPhone {
+                        HStack(alignment: .center, spacing: 12) {
+                            documentMenu
+                                .frame(width: 48, height: 48)
+                                .background(.black.opacity(0.001), in: Circle())
 
-                        topReaderControls
+                            topReaderControls
 
-                        Spacer(minLength: 0)
-
-                        if !isPhone || isSearchPresented {
-                            searchControls
-                                .frame(maxWidth: isPhone ? .infinity : 440)
+                            Spacer(minLength: 0)
                         }
+                        .padding(.horizontal, 28)
+                        .padding(.top, 56)
+
+                        if isSearchPresented {
+                            searchControls
+                                .frame(maxWidth: .infinity)
+                                .padding(.horizontal, 28)
+                                .padding(.top, 6)
+                        }
+                    } else {
+                        HStack(alignment: .center, spacing: 12) {
+                            documentMenu
+                                .frame(width: 48, height: 48)
+                                .background(.black.opacity(0.001), in: Circle())
+
+                            topReaderControls
+
+                            Spacer(minLength: 0)
+
+                            searchControls
+                                .frame(maxWidth: 440)
+                        }
+                        .padding(.horizontal, 28)
+                        .padding(.top, 42)
                     }
-                    .padding(.horizontal, 28)
-                    .padding(.top, isPhone ? 56 : 42)
                     Spacer(minLength: 0)
                 }
                 .zIndex(1)
