@@ -216,6 +216,13 @@ struct ContentView: View {
                     guard document.id == selectedDocumentID else { return }
                     pdfKitCurrentPageIndex = pageIndex
                 },
+                onJumpToFirstPage: { sourcePageIndex, destinationPageIndex in
+                    recordNavigation(
+                        in: document,
+                        from: sourcePageIndex,
+                        to: destinationPageIndex
+                    )
+                },
                 onCenterTap: {
                     toggleReaderFocus()
                 },

@@ -14,6 +14,7 @@ struct PDFDocumentView: UIViewRepresentable {
     var requestedPageIndex: Int?
     var onPageChanged: (Int) -> Void = { _ in }
     var onPDFKitCurrentPageChanged: (Int) -> Void = { _ in }
+    var onJumpToFirstPage: (Int, Int) -> Void = { _, _ in }
     var onCenterTap: () -> Void = { }
     var onLinkNavigation: (Int, Int) -> Void = { _, _ in }
 
@@ -31,6 +32,7 @@ struct PDFDocumentView: UIViewRepresentable {
     func updateUIView(_ pdfView: PDFView, context: Context) {
         context.coordinator.onPageChanged = onPageChanged
         context.coordinator.onPDFKitCurrentPageChanged = onPDFKitCurrentPageChanged
+        context.coordinator.onJumpToFirstPage = onJumpToFirstPage
         context.coordinator.onCenterTap = onCenterTap
         context.coordinator.onLinkNavigation = onLinkNavigation
         context.coordinator.disableDoubleTapZoom(in: pdfView)
@@ -64,6 +66,7 @@ struct PDFDocumentView: UIViewRepresentable {
         var loadedDocument: PDFDocument?
         var onPageChanged: (Int) -> Void = { _ in }
         var onPDFKitCurrentPageChanged: (Int) -> Void = { _ in }
+        var onJumpToFirstPage: (Int, Int) -> Void = { _, _ in }
         var onCenterTap: () -> Void = { }
         var onLinkNavigation: (Int, Int) -> Void = { _, _ in }
         private var isReaderFocused = false
@@ -81,6 +84,7 @@ struct PDFDocumentView: UIViewRepresentable {
         private var observedMotionRecognizers = Set<ObjectIdentifier>()
         private var observedPinchRecognizers = Set<ObjectIdentifier>()
         private var protectedPageIndex: Int?
+        private var expectedNavigationPageIndex: Int?
         private var transientPageChangeTokens = Set<UUID>()
         var lastKnownPageIndex = 0
 
@@ -101,6 +105,10 @@ struct PDFDocumentView: UIViewRepresentable {
         private func validPageIndex(_ pageIndex: Int, in document: PDFDocument) -> Int? {
             guard document.pageCount > 0 else { return nil }
             return min(max(pageIndex, 0), document.pageCount - 1)
+        }
+
+        private func expectNavigation(to pageIndex: Int) {
+            expectedNavigationPageIndex = pageIndex
         }
 
         func install(_ document: PDFDocument, at pageIndex: Int, in pdfView: PDFView) {
@@ -259,6 +267,9 @@ struct PDFDocumentView: UIViewRepresentable {
                       let pdfView,
                       self.pendingSearchSelection === selection else { return }
                 self.pendingSearchSelection = nil
+                if let document = pdfView.document {
+                    self.expectNavigation(to: document.index(for: page))
+                }
                 pdfView.go(to: page)
                 self.showPendingSearchHighlightIfReady(in: pdfView)
             }
@@ -278,6 +289,10 @@ struct PDFDocumentView: UIViewRepresentable {
             guard displayedOutlineDestination !== destination else { return }
             displayedOutlineDestination = destination
             if let destination {
+                if let page = destination.page,
+                   let document = pdfView.document {
+                    expectNavigation(to: document.index(for: page))
+                }
                 pdfView.go(to: destination)
             }
         }
@@ -290,6 +305,7 @@ struct PDFDocumentView: UIViewRepresentable {
             guard displayedRequestedPageIndex != pageIndex,
                   let page = pdfView.document?.page(at: pageIndex) else { return }
             displayedRequestedPageIndex = pageIndex
+            expectNavigation(to: pageIndex)
             pdfView.go(to: page)
         }
 
@@ -298,6 +314,7 @@ struct PDFDocumentView: UIViewRepresentable {
                   let document = pdfView.document,
                   let page = pdfView.currentPage else { return }
             let currentPageIndex = document.index(for: page)
+            let previousPageIndex = lastKnownPageIndex
             hideSearchHighlight()
 
             // PDFKit reports page zero while it is rebuilding its private
@@ -318,6 +335,19 @@ struct PDFDocumentView: UIViewRepresentable {
                     at: protectedPage.bounds(for: .mediaBox).origin
                 ))
                 return
+            }
+
+            let isExpectedNavigation = expectedNavigationPageIndex == currentPageIndex
+            if isExpectedNavigation {
+                expectedNavigationPageIndex = nil
+            }
+            // Tapping the system status area scrolls PDFKit's scroll view all
+            // the way to its beginning. Treat that large, otherwise
+            // unexplained move to page one as a real history event.
+            if !isExpectedNavigation,
+               currentPageIndex == 0,
+               previousPageIndex > 1 {
+                onJumpToFirstPage(previousPageIndex, currentPageIndex)
             }
 
             // PDFKit's `currentPage` is generally the page nearest the
@@ -398,6 +428,7 @@ struct PDFDocumentView: UIViewRepresentable {
                let destinationPage = destination.page,
                let document = pdfView.document {
                 onLinkNavigation(document.index(for: page), document.index(for: destinationPage))
+                expectNavigation(to: document.index(for: destinationPage))
                 pdfView.go(to: destination)
             } else if let url = annotation.url {
                 UIApplication.shared.open(url)
