@@ -272,7 +272,7 @@ struct ContentView: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: isPhone ? 210 : 180)
+                .frame(height: isPhone ? (isSearchPresented ? 280 : 210) : 180)
                 Spacer(minLength: 0)
                 LinearGradient(
                     colors: [.black.opacity(0), .black.opacity(0.78)],
