@@ -316,6 +316,9 @@ struct ContentView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.horizontal, 28)
                                 .padding(.top, 6)
+                                .onAppear {
+                                    isSearchFieldFocused = true
+                                }
                         }
                     } else {
                         HStack(alignment: .center, spacing: 12) {
