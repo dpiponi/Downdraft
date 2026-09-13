@@ -29,6 +29,7 @@ struct ContentView: View {
     @State private var scrubberRevision = 0
     @State private var deviceOrientation = UIDevice.current.orientation
     @State private var isSearchPresented = false
+    @FocusState private var isSearchFieldFocused: Bool
     @State private var bookmarkPreview: UIImage?
 
     private var selectedDocument: OpenDocument? {
@@ -42,6 +43,10 @@ struct ContentView: View {
 
     private var isPhone: Bool {
         UIDevice.current.userInterfaceIdiom == .phone
+    }
+
+    private var isSearchActive: Bool {
+        isSearchFieldFocused || !searchText.isEmpty
     }
 
     private var visibleBookmarks: [(index: Int, pageIndex: Int)] {
@@ -467,7 +472,15 @@ struct ContentView: View {
                 }
                 .accessibilityLabel("Open PDF")
                 Button {
-                    isSearchPresented.toggle()
+                    if isSearchPresented {
+                        isSearchFieldFocused = false
+                        isSearchPresented = false
+                    } else {
+                        isSearchPresented = true
+                        DispatchQueue.main.async {
+                            isSearchFieldFocused = true
+                        }
+                    }
                 } label: {
                     Image(systemName: "magnifyingglass")
                         .frame(width: 44, height: 44)
@@ -590,6 +603,7 @@ struct ContentView: View {
         HStack(spacing: 8) {
             TextField("Find in PDF", text: $searchText)
                 .textFieldStyle(.plain)
+                .focused($isSearchFieldFocused)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .onSubmit(performSearch)
@@ -614,7 +628,7 @@ struct ContentView: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 58)
-        .background(.black.opacity(0.58), in: Capsule())
+        .background(.black.opacity(isSearchActive ? 0.58 : 0.001), in: Capsule())
         .tint(.white)
         .foregroundStyle(.white)
     }
@@ -663,6 +677,7 @@ struct ContentView: View {
         withAnimation(.easeInOut(duration: 0.24)) {
             if !isReaderFocused {
                 isSearchPresented = false
+                isSearchFieldFocused = false
             }
             isReaderFocused.toggle()
         }
