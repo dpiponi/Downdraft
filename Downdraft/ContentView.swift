@@ -272,7 +272,7 @@ struct ContentView: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: isPhone ? (isSearchPresented ? 280 : 210) : 180)
+                .frame(height: isPhone ? 210 : 180)
                 Spacer(minLength: 0)
                 LinearGradient(
                     colors: [.black.opacity(0), .black.opacity(0.78)],
@@ -614,7 +614,7 @@ struct ContentView: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 58)
-        .background(.black.opacity(0.001), in: Capsule())
+        .background(isPhone ? .black.opacity(0.58) : .black.opacity(0.001), in: Capsule())
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(.white.opacity(0.45))
