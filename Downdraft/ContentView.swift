@@ -601,6 +601,17 @@ struct ContentView: View {
 
     private var searchControls: some View {
         HStack(spacing: 8) {
+            Button {
+                isSearchFieldFocused = true
+            } label: {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Start search")
+
             TextField("Find in PDF", text: $searchText)
                 .textFieldStyle(.plain)
                 .focused($isSearchFieldFocused)
