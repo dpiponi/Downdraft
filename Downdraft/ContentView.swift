@@ -615,11 +615,6 @@ struct ContentView: View {
         .padding(.horizontal, 10)
         .frame(height: 58)
         .background(.black.opacity(0.58), in: Capsule())
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(.white.opacity(0.45))
-                .frame(height: 1)
-        }
         .tint(.white)
         .foregroundStyle(.white)
     }
