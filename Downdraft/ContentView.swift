@@ -144,7 +144,11 @@ struct ContentView: View {
         }
         .sheet(isPresented: $isShowingMetadata) {
             if let document = selectedDocument, let pdfDocument = document.pdfDocument {
-                PDFMetadataView(document: pdfDocument, filename: document.fullFileName)
+                PDFMetadataView(
+                    document: pdfDocument,
+                    filename: document.fullFileName,
+                    fileLocation: document.fullFileLocation
+                )
             }
         }
         .fileImporter(
@@ -1439,6 +1443,7 @@ private struct TableOfContentsView: View {
 private struct PDFMetadataView: View {
     let document: PDFDocument
     let filename: String
+    let fileLocation: String
     @Environment(\.dismiss) private var dismiss
 
     private var rows: [(label: String, value: String)] {
@@ -1465,6 +1470,12 @@ private struct PDFMetadataView: View {
                 Section("Document") {
                     LabeledContent("File") {
                         Text(filename)
+                            .multilineTextAlignment(.trailing)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                    }
+                    LabeledContent("Location") {
+                        Text(fileLocation)
                             .multilineTextAlignment(.trailing)
                             .fixedSize(horizontal: false, vertical: true)
                             .textSelection(.enabled)
@@ -1541,6 +1552,16 @@ private final class OpenDocument: Identifiable {
             return originalURL.lastPathComponent
         }
         return displayName.hasSuffix(".pdf") ? displayName : "\(displayName).pdf"
+    }
+
+    var fullFileLocation: String {
+        if let url {
+            return url.path
+        }
+        if let originalURL = URL(string: originalURLString), !originalURL.path.isEmpty {
+            return originalURL.path
+        }
+        return originalURLString
     }
 
     init(
