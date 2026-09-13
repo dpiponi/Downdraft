@@ -637,6 +637,15 @@ struct ContentView: View {
                     .monospacedDigit()
                     .fixedSize()
             }
+            if isSearchActive {
+                Button(action: dismissSearch) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3.weight(.medium))
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Dismiss search")
+            }
         }
         .padding(.horizontal, 10)
         .frame(height: 58)
@@ -791,6 +800,15 @@ struct ContentView: View {
     private func clearSearch() {
         searchResults = []
         currentSearchResultIndex = 0
+    }
+
+    private func dismissSearch() {
+        searchText = ""
+        clearSearch()
+        isSearchFieldFocused = false
+        if isPhone {
+            isSearchPresented = false
+        }
     }
 
     private func setFirstPageCover(_ value: Bool) {
