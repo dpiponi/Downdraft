@@ -144,7 +144,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $isShowingMetadata) {
             if let document = selectedDocument, let pdfDocument = document.pdfDocument {
-                PDFMetadataView(document: pdfDocument, filename: document.displayName)
+                PDFMetadataView(document: pdfDocument, filename: document.fullFileName)
             }
         }
         .fileImporter(
@@ -1463,7 +1463,12 @@ private struct PDFMetadataView: View {
         NavigationStack {
             List {
                 Section("Document") {
-                    LabeledContent("File", value: filename)
+                    LabeledContent("File") {
+                        Text(filename)
+                            .multilineTextAlignment(.trailing)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                    }
                     LabeledContent("Pages", value: String(document.pageCount))
                 }
                 if !rows.isEmpty {
@@ -1526,6 +1531,16 @@ private final class OpenDocument: Identifiable {
     var persistentIdentity: String {
         if !originalURLString.isEmpty { return originalURLString }
         return url?.standardizedFileURL.absoluteString ?? ""
+    }
+
+    var fullFileName: String {
+        if let url {
+            return url.lastPathComponent
+        }
+        if let originalURL = URL(string: originalURLString), !originalURL.lastPathComponent.isEmpty {
+            return originalURL.lastPathComponent
+        }
+        return displayName.hasSuffix(".pdf") ? displayName : "\(displayName).pdf"
     }
 
     init(
