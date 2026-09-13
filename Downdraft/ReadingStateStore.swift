@@ -161,7 +161,7 @@ enum ReadingStateStore {
         defaults.set(data, forKey: localKey(for: identity))
     }
 
-    private static func merged(_ lhs: State, _ rhs: State) -> State {
+    static func merged(_ lhs: State, _ rhs: State) -> State {
         State(
             page: newer(lhs.page, rhs.page),
             bookmarks: mergedBookmarks(lhs.bookmarks, rhs.bookmarks)

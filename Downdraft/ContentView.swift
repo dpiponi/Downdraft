@@ -168,6 +168,12 @@ struct ContentView: View {
         .onAppear {
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
             deviceOrientation = UIDevice.current.orientation
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--ui-testing-fixture") {
+                installUITestFixture()
+                return
+            }
+            #endif
             if selectedDocumentID == nil {
                 let documentID = OpenDocument.restoredSelectedDocumentID(in: documents)
                     ?? documents.first?.id
@@ -720,6 +726,27 @@ struct ContentView: View {
             errorMessage = error.localizedDescription
         }
     }
+
+    #if DEBUG
+    private func installUITestFixture() {
+        documents.forEach { $0.stopAccessingFile() }
+        documents = []
+        selectedDocumentID = nil
+        guard let url = UITestPDF.makeFixture() else {
+            errorMessage = "Downdraft couldn’t create its test PDF."
+            return
+        }
+        let document = OpenDocument(
+            url: url,
+            bookmarkData: Data(),
+            displayName: "Downdraft UI Fixture",
+            originalURLString: url.absoluteString,
+            isAccessingFile: false
+        )
+        documents = [document]
+        selectDocument(document.id)
+    }
+    #endif
 
     private func open(_ url: URL) {
         let matchingDocuments = documents.filter { $0.matches(url) }
@@ -1534,7 +1561,7 @@ private struct PDFMetadataView: View {
     }
 }
 
-private final class OpenDocument: Identifiable {
+final class OpenDocument: Identifiable {
     let id = UUID()
     private(set) var url: URL?
     private(set) var pdfDocument: PDFDocument?

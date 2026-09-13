@@ -6,24 +6,100 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B00000000000000000000004 /* DowndraftWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* DowndraftWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B0000000000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A0000000000000000000000A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B00000000000000000000006;
+			remoteInfo = DowndraftWidget;
+		};
+		C00000000000000000000011 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A0000000000000000000000A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00000000000000000000005;
+			remoteInfo = Downdraft;
+		};
+		C00000000000000000000012 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A0000000000000000000000A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00000000000000000000005;
+			remoteInfo = Downdraft;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B00000000000000000000003 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B00000000000000000000004 /* DowndraftWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		A00000000000000000000001 /* Downdraft.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Downdraft.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B00000000000000000000001 /* DowndraftWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DowndraftWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		C00000000000000000000001 /* DowndraftTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DowndraftTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C00000000000000000000002 /* DowndraftUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DowndraftUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A00000000000000000000010 /* Exceptions for "Downdraft" folder in "Downdraft" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A00000000000000000000005 /* Downdraft */;
+		};
+		B0000000000000000000000E /* Exceptions for "DowndraftWidget" folder in "DowndraftWidget" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B00000000000000000000006 /* DowndraftWidget */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A00000000000000000000002 /* Downdraft */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (A00000000000000000000010 /* App build exceptions */,);
+			exceptions = (
+				A00000000000000000000010 /* Exceptions for "Downdraft" folder in "Downdraft" target */,
+			);
 			path = Downdraft;
 			sourceTree = "<group>";
 		};
-		B00000000000000000000002 /* DowndraftWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (B0000000000000000000000E /* Widget build exceptions */,); path = DowndraftWidget; sourceTree = "<group>"; };
+		B00000000000000000000002 /* DowndraftWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B0000000000000000000000E /* Exceptions for "DowndraftWidget" folder in "DowndraftWidget" target */,
+			);
+			path = DowndraftWidget;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000003 /* DowndraftTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = DowndraftTests;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000004 /* DowndraftUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = DowndraftUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		A00000000000000000000010 /* App build exceptions */ = {isa = PBXFileSystemSynchronizedBuildFileExceptionSet; membershipExceptions = (Info.plist,); target = A00000000000000000000005 /* Downdraft */; };
-		B0000000000000000000000E /* Widget build exceptions */ = {isa = PBXFileSystemSynchronizedBuildFileExceptionSet; membershipExceptions = (Info.plist,); target = B00000000000000000000006 /* DowndraftWidget */; };
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A00000000000000000000008 /* Frameworks */ = {
@@ -33,13 +109,28 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B00000000000000000000009 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C00000000000000000000008 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C0000000000000000000000E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
-/* Begin PBXBuildFile section */
-		B00000000000000000000004 /* DowndraftWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* DowndraftWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-/* End PBXBuildFile section */
-/* Begin PBXCopyFilesBuildPhase section */
-		B00000000000000000000003 /* Embed Foundation Extensions */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (B00000000000000000000004 /* DowndraftWidget.appex in Embed Foundation Extensions */,); name = "Embed Foundation Extensions"; runOnlyForDeploymentPostprocessing = 0; };
-/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXGroup section */
 		A00000000000000000000003 = {
@@ -47,6 +138,8 @@
 			children = (
 				A00000000000000000000002 /* Downdraft */,
 				B00000000000000000000002 /* DowndraftWidget */,
+				C00000000000000000000003 /* DowndraftTests */,
+				C00000000000000000000004 /* DowndraftUITests */,
 				A00000000000000000000004 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -56,6 +149,8 @@
 			children = (
 				A00000000000000000000001 /* Downdraft.app */,
 				B00000000000000000000001 /* DowndraftWidget.appex */,
+				C00000000000000000000001 /* DowndraftTests.xctest */,
+				C00000000000000000000002 /* DowndraftUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -74,7 +169,9 @@
 			);
 			buildRules = (
 			);
-			dependencies = (B00000000000000000000005 /* DowndraftWidget dependency */,);
+			dependencies = (
+				B00000000000000000000005 /* PBXTargetDependency */,
+			);
 			fileSystemSynchronizedGroups = (
 				A00000000000000000000002 /* Downdraft */,
 			);
@@ -85,7 +182,74 @@
 			productReference = A00000000000000000000001 /* Downdraft.app */;
 			productType = "com.apple.product-type.application";
 		};
-		B00000000000000000000006 /* DowndraftWidget */ = {isa = PBXNativeTarget; buildConfigurationList = B00000000000000000000007 /* Build configuration list for PBXNativeTarget "DowndraftWidget" */; buildPhases = (B00000000000000000000008 /* Sources */, B00000000000000000000009 /* Frameworks */, B0000000000000000000000A /* Resources */); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (B00000000000000000000002 /* DowndraftWidget */); name = DowndraftWidget; packageProductDependencies = (); productName = DowndraftWidget; productReference = B00000000000000000000001 /* DowndraftWidget.appex */; productType = "com.apple.product-type.app-extension"; };
+		B00000000000000000000006 /* DowndraftWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B00000000000000000000007 /* Build configuration list for PBXNativeTarget "DowndraftWidget" */;
+			buildPhases = (
+				B00000000000000000000008 /* Sources */,
+				B00000000000000000000009 /* Frameworks */,
+				B0000000000000000000000A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B00000000000000000000002 /* DowndraftWidget */,
+			);
+			name = DowndraftWidget;
+			packageProductDependencies = (
+			);
+			productName = DowndraftWidget;
+			productReference = B00000000000000000000001 /* DowndraftWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		C00000000000000000000005 /* DowndraftTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C00000000000000000000006 /* Build configuration list for PBXNativeTarget "DowndraftTests" */;
+			buildPhases = (
+				C00000000000000000000007 /* Sources */,
+				C00000000000000000000008 /* Frameworks */,
+				C00000000000000000000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C0000000000000000000000A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				C00000000000000000000003 /* DowndraftTests */,
+			);
+			name = DowndraftTests;
+			packageProductDependencies = (
+			);
+			productName = DowndraftTests;
+			productReference = C00000000000000000000001 /* DowndraftTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		C0000000000000000000000B /* DowndraftUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C0000000000000000000000C /* Build configuration list for PBXNativeTarget "DowndraftUITests" */;
+			buildPhases = (
+				C0000000000000000000000D /* Sources */,
+				C0000000000000000000000E /* Frameworks */,
+				C0000000000000000000000F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C00000000000000000000010 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				C00000000000000000000004 /* DowndraftUITests */,
+			);
+			name = DowndraftUITests;
+			packageProductDependencies = (
+			);
+			productName = DowndraftUITests;
+			productReference = C00000000000000000000002 /* DowndraftUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -95,12 +259,26 @@
 				LastSwiftUpdateCheck = 2600;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
-				A00000000000000000000005 = {
-					CreatedOnToolsVersion = 26.0;
-					SystemCapabilities = {com.apple.ApplicationGroups.iOS = {enabled = 1; }; com.apple.iCloud = {enabled = 1; }; };
+					A00000000000000000000005 = {
+						CreatedOnToolsVersion = 26.0;
+						SystemCapabilities = {
+							com.apple.ApplicationGroups.iOS = {
+								enabled = 1;
+							};
+							com.apple.iCloud = {
+								enabled = 1;
+							};
+						};
+					};
+					B00000000000000000000006 = {
+						CreatedOnToolsVersion = 26.0;
+						SystemCapabilities = {
+							com.apple.ApplicationGroups.iOS = {
+								enabled = 1;
+							};
+						};
+					};
 				};
-				B00000000000000000000006 = {CreatedOnToolsVersion = 26.0; SystemCapabilities = {com.apple.ApplicationGroups.iOS = {enabled = 1; }; };};
-			};
 			};
 			buildConfigurationList = A0000000000000000000000B /* Build configuration list for PBXProject "Downdraft" */;
 			developmentRegion = en;
@@ -118,6 +296,8 @@
 			targets = (
 				A00000000000000000000005 /* Downdraft */,
 				B00000000000000000000006 /* DowndraftWidget */,
+				C00000000000000000000005 /* DowndraftTests */,
+				C0000000000000000000000B /* DowndraftUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -130,8 +310,28 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B0000000000000000000000A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C00000000000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C0000000000000000000000F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
-		B0000000000000000000000A /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 
 /* Begin PBXSourcesBuildPhase section */
 		A00000000000000000000007 /* Sources */ = {
@@ -141,14 +341,45 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B00000000000000000000008 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C00000000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C0000000000000000000000D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
-		B00000000000000000000008 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		B00000000000000000000009 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-/* Begin PBXContainerItemProxy section */
-		B0000000000000000000000B /* Widget proxy */ = {isa = PBXContainerItemProxy; containerPortal = A0000000000000000000000A /* Project object */; proxyType = 1; remoteGlobalIDString = B00000000000000000000006; remoteInfo = DowndraftWidget; };
-/* End PBXContainerItemProxy section */
+
 /* Begin PBXTargetDependency section */
-		B00000000000000000000005 /* DowndraftWidget dependency */ = {isa = PBXTargetDependency; target = B00000000000000000000006 /* DowndraftWidget */; targetProxy = B0000000000000000000000B /* Widget proxy */; };
+		B00000000000000000000005 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B00000000000000000000006 /* DowndraftWidget */;
+			targetProxy = B0000000000000000000000B /* PBXContainerItemProxy */;
+		};
+		C0000000000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00000000000000000000005 /* Downdraft */;
+			targetProxy = C00000000000000000000011 /* PBXContainerItemProxy */;
+		};
+		C00000000000000000000010 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00000000000000000000005 /* Downdraft */;
+			targetProxy = C00000000000000000000012 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -191,8 +422,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
 				CODE_SIGN_ENTITLEMENTS = Downdraft/Downdraft.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8X94X6Z25L;
 				INFOPLIST_FILE = Downdraft/Info.plist;
@@ -203,6 +434,7 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_VISIONOS = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -213,8 +445,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
 				CODE_SIGN_ENTITLEMENTS = Downdraft/Downdraft.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8X94X6Z25L;
 				INFOPLIST_FILE = Downdraft/Info.plist;
@@ -230,8 +462,100 @@
 			};
 			name = Release;
 		};
-		B0000000000000000000000C /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = DowndraftWidget/DowndraftWidget.entitlements; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = 8X94X6Z25L; INFOPLIST_FILE = DowndraftWidget/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 18.0; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.dan.Downdraft.Widget; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
-		B0000000000000000000000D /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = DowndraftWidget/DowndraftWidget.entitlements; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = 8X94X6Z25L; INFOPLIST_FILE = DowndraftWidget/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 18.0; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.dan.Downdraft.Widget; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+		B0000000000000000000000C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = DowndraftWidget/DowndraftWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8X94X6Z25L;
+				INFOPLIST_FILE = DowndraftWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dan.Downdraft.Widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B0000000000000000000000D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = DowndraftWidget/DowndraftWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8X94X6Z25L;
+				INFOPLIST_FILE = DowndraftWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dan.Downdraft.Widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		C00000000000000000000013 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dan.DowndraftTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Downdraft.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Downdraft";
+				TEST_TARGET_NAME = Downdraft;
+			};
+			name = Debug;
+		};
+		C00000000000000000000014 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dan.DowndraftTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Downdraft.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Downdraft";
+				TEST_TARGET_NAME = Downdraft;
+			};
+			name = Release;
+		};
+		C00000000000000000000015 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dan.DowndraftUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Downdraft;
+			};
+			name = Debug;
+		};
+		C00000000000000000000016 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dan.DowndraftUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Downdraft;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -253,7 +577,33 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B00000000000000000000007 /* Build configuration list for PBXNativeTarget "DowndraftWidget" */ = {isa = XCConfigurationList; buildConfigurations = (B0000000000000000000000C /* Debug */, B0000000000000000000000D /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		B00000000000000000000007 /* Build configuration list for PBXNativeTarget "DowndraftWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B0000000000000000000000C /* Debug */,
+				B0000000000000000000000D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C00000000000000000000006 /* Build configuration list for PBXNativeTarget "DowndraftTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C00000000000000000000013 /* Debug */,
+				C00000000000000000000014 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C0000000000000000000000C /* Build configuration list for PBXNativeTarget "DowndraftUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C00000000000000000000015 /* Debug */,
+				C00000000000000000000016 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 	};
 	rootObject = A0000000000000000000000A /* Project object */;
