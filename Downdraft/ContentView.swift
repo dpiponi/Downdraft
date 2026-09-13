@@ -605,8 +605,9 @@ struct ContentView: View {
                 isSearchFieldFocused = true
             } label: {
                 Image(systemName: "magnifyingglass")
+                    .font(.title3.weight(.medium))
                     .foregroundStyle(.white)
-                    .frame(width: 32, height: 36)
+                    .frame(width: 36, height: 36)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
