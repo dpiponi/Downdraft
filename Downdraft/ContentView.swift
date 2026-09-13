@@ -740,6 +740,27 @@ struct ContentView: View {
             errorMessage = "Downdraft couldn’t save permission to reopen this PDF."
             return
         }
+
+        guard document.loadFileIfNeeded() else {
+            document.stopAccessingFile()
+            errorMessage = "Downdraft couldn’t open this PDF."
+            return
+        }
+
+        let contentMatchingDocuments = documents.filter {
+            $0.matches(url)
+                || (document.readingStateIdentity != nil
+                    && $0.readingStateIdentity == document.readingStateIdentity)
+        }
+        if let existingDocument = contentMatchingDocuments.first {
+            document.stopAccessingFile()
+            for duplicate in contentMatchingDocuments.dropFirst() {
+                close(duplicate.id)
+            }
+            selectDocument(existingDocument.id)
+            return
+        }
+
         documents.append(document)
         selectDocument(document.id)
         saveDocuments()
@@ -1569,6 +1590,7 @@ private final class OpenDocument: Identifiable {
         bookmarkData: Data,
         displayName: String,
         originalURLString: String,
+        readingStateIdentity: String? = nil,
         lastPageIndex: Int = 0,
         displaysAsBook: Bool = true,
         readsHorizontally: Bool = false,
@@ -1580,6 +1602,7 @@ private final class OpenDocument: Identifiable {
         self.bookmarkData = bookmarkData
         self.displayName = displayName
         self.originalURLString = originalURLString
+        self.readingStateIdentity = readingStateIdentity
         self.lastPageIndex = lastPageIndex
         self.displaysAsBook = displaysAsBook
         self.readsHorizontally = readsHorizontally
@@ -1685,6 +1708,7 @@ private final class OpenDocument: Identifiable {
         let bookmarkData: Data
         let displayName: String
         let originalURLString: String?
+        let readingStateIdentity: String?
         let lastPageIndex: Int
         let displaysAsBook: Bool?
         let readsHorizontally: Bool?
@@ -1701,6 +1725,7 @@ private final class OpenDocument: Identifiable {
                 bookmarkData: $0.bookmarkData,
                 displayName: $0.displayName,
                 originalURLString: $0.originalURLString,
+                readingStateIdentity: $0.readingStateIdentity,
                 lastPageIndex: $0.lastPageIndex,
                 displaysAsBook: $0.displaysAsBook,
                 readsHorizontally: $0.readsHorizontally,
@@ -1734,6 +1759,7 @@ private final class OpenDocument: Identifiable {
                 bookmarkData: savedDocument.bookmarkData,
                 displayName: savedDocument.displayName,
                 originalURLString: savedDocument.originalURLString ?? "",
+                readingStateIdentity: savedDocument.readingStateIdentity,
                 lastPageIndex: savedDocument.lastPageIndex,
                 displaysAsBook: savedDocument.displaysAsBook ?? true,
                 readsHorizontally: savedDocument.readsHorizontally ?? false,
