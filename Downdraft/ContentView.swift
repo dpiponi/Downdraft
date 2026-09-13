@@ -614,7 +614,7 @@ struct ContentView: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 58)
-        .background(isPhone ? .black.opacity(0.58) : .black.opacity(0.001), in: Capsule())
+        .background(.black.opacity(0.58), in: Capsule())
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(.white.opacity(0.45))
