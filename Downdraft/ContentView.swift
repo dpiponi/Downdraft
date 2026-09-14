@@ -669,22 +669,28 @@ struct ContentView: View {
     private var historyControls: some View {
         HStack(spacing: 10) {
             if let document = selectedDocument {
-                Button { navigateBack(in: document) } label: {
+                Button {
+                    guard document.canNavigateBack else { return }
+                    navigateBack(in: document)
+                } label: {
                     Image(systemName: "chevron.backward")
                         .font(.title3.weight(.medium))
                         .frame(width: 40, height: 40)
                 }
                 .accessibilityLabel("Back")
-                .disabled(!document.canNavigateBack)
-                .opacity(isPhone && !document.canNavigateBack ? 0.35 : 1)
-                Button { navigateForward(in: document) } label: {
+                .buttonStyle(.plain)
+                .foregroundStyle(isPhone && !document.canNavigateBack ? Color(white: 0.58) : .white)
+                Button {
+                    guard document.canNavigateForward else { return }
+                    navigateForward(in: document)
+                } label: {
                     Image(systemName: "chevron.forward")
                         .font(.title3.weight(.medium))
                         .frame(width: 40, height: 40)
                 }
                 .accessibilityLabel("Forward")
-                .disabled(!document.canNavigateForward)
-                .opacity(isPhone && !document.canNavigateForward ? 0.35 : 1)
+                .buttonStyle(.plain)
+                .foregroundStyle(isPhone && !document.canNavigateForward ? Color(white: 0.58) : .white)
             }
         }
         // OpenDocument is a reference type.  Recreate these controls when its
