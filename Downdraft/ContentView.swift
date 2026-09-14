@@ -679,7 +679,7 @@ struct ContentView: View {
                 }
                 .accessibilityLabel("Back")
                 .buttonStyle(.plain)
-                .foregroundStyle(isPhone && !document.canNavigateBack ? Color(white: 0.58) : .white)
+                .foregroundStyle(!document.canNavigateBack ? Color(white: 0.58) : .white)
                 Button {
                     guard document.canNavigateForward else { return }
                     navigateForward(in: document)
@@ -690,7 +690,7 @@ struct ContentView: View {
                 }
                 .accessibilityLabel("Forward")
                 .buttonStyle(.plain)
-                .foregroundStyle(isPhone && !document.canNavigateForward ? Color(white: 0.58) : .white)
+                .foregroundStyle(!document.canNavigateForward ? Color(white: 0.58) : .white)
             }
         }
         // OpenDocument is a reference type.  Recreate these controls when its
@@ -1103,6 +1103,12 @@ private struct PageScrubber: View {
                 value: Binding(
                     get: { Double(pendingPageIndex ?? pageIndex) },
                     set: { newValue in
+                        // Some slider interactions deliver their first value
+                        // before `onEditingChanged(true)`. Capture the origin
+                        // here as well, before asking PDFKit to change pages.
+                        if pageIndexWhenScrubbingBegan == nil {
+                            pageIndexWhenScrubbingBegan = pageIndex
+                        }
                         let newPageIndex = Int(newValue.rounded())
                         pendingPageIndex = newPageIndex
                         seek(newPageIndex)
@@ -1112,7 +1118,9 @@ private struct PageScrubber: View {
                 step: 1,
                 onEditingChanged: { isEditing in
                     if isEditing {
-                        pageIndexWhenScrubbingBegan = pageIndex
+                        if pageIndexWhenScrubbingBegan == nil {
+                            pageIndexWhenScrubbingBegan = pageIndex
+                        }
                         pendingPageIndex = pageIndex
                         return
                     }
