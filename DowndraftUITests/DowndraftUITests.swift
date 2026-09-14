@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 final class DowndraftUITests: XCTestCase {
     private func launchFixture() -> XCUIApplication {
         let app = XCUIApplication()
@@ -40,5 +41,38 @@ final class DowndraftUITests: XCTestCase {
         XCTAssertTrue(app.sliders.firstMatch.waitForExistence(timeout: 3))
         XCUIDevice.shared.orientation = .portrait
         XCTAssertTrue(app.sliders.firstMatch.waitForExistence(timeout: 3))
+    }
+
+    func testTopControlsRemainResponsiveAfterRepeatedMenus() {
+        let app = launchFixture()
+
+        app.buttons["PDF information"].tap()
+        XCTAssertTrue(app.navigationBars["PDF Information"].waitForExistence(timeout: 3))
+        app.buttons["Done"].tap()
+
+        let layout = app.buttons["Reader layout"]
+        layout.tap()
+        XCTAssertTrue(app.buttons["Scroll horizontally"].waitForExistence(timeout: 3))
+        app.buttons["Scroll horizontally"].tap()
+
+        layout.tap()
+        XCTAssertTrue(app.buttons["Scroll vertically"].waitForExistence(timeout: 3))
+        app.buttons["Scroll vertically"].tap()
+
+        app.buttons["Documents"].tap()
+        XCTAssertTrue(app.staticTexts["Downdraft UI Fixture"].waitForExistence(timeout: 3))
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.sliders.firstMatch.waitForExistence(timeout: 3))
+    }
+
+    func testHistoryBackWorksAfterTheFirstScrub() {
+        let app = launchFixture()
+        let slider = app.sliders.firstMatch
+        XCTAssertTrue(slider.waitForExistence(timeout: 3))
+
+        slider.adjust(toNormalizedSliderPosition: 1)
+        XCTAssertTrue(app.staticTexts["Page 3 of 3"].waitForExistence(timeout: 3))
+        app.buttons["Back"].tap()
+        XCTAssertTrue(app.staticTexts["Page 1 of 3"].waitForExistence(timeout: 5))
     }
 }
