@@ -390,10 +390,6 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
                 VStack(spacing: 8) {
-                    if isPhone {
-                        historyControls
-                            .padding(.vertical, 8)
-                    }
                     scrubber(for: document)
                         .padding(.top, 6)
                         .padding(.bottom, isPhone ? 14 : 10)
@@ -413,7 +409,10 @@ struct ContentView: View {
     private var topReaderControls: some View {
         HStack(spacing: 12) {
             primaryReaderControls
-            if !isPhone {
+            if isPhone {
+                historyControls
+                    .frame(height: 58)
+            } else {
                 historyControls
                     .padding(.horizontal, 16)
                     .frame(height: 58)
@@ -478,12 +477,8 @@ struct ContentView: View {
                 }
                 .accessibilityLabel("Reader layout")
             } else {
-                Button { isShowingFilePicker = true } label: {
-                    Image(systemName: "folder")
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel("Open PDF")
+                // The document picker includes an Open PDF action on iPhone,
+                // which leaves this compact row room for history controls.
                 Button {
                     if isSearchPresented {
                         isSearchFieldFocused = false
