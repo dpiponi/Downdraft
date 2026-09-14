@@ -400,7 +400,7 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.horizontal, 28)
-                .padding(.bottom, isPhone ? 44 : 42)
+                .padding(.bottom, isPhone ? 36 : 42)
                 .foregroundStyle(.white)
                 .tint(.white)
             }
@@ -676,14 +676,16 @@ struct ContentView: View {
                         .frame(width: 40, height: 40)
                 }
                 .accessibilityLabel("Back")
-                    .disabled(!document.canNavigateBack)
+                .disabled(!document.canNavigateBack)
+                .opacity(isPhone && !document.canNavigateBack ? 0.35 : 1)
                 Button { navigateForward(in: document) } label: {
                     Image(systemName: "chevron.forward")
                         .font(.title3.weight(.medium))
                         .frame(width: 40, height: 40)
                 }
                 .accessibilityLabel("Forward")
-                    .disabled(!document.canNavigateForward)
+                .disabled(!document.canNavigateForward)
+                .opacity(isPhone && !document.canNavigateForward ? 0.35 : 1)
             }
         }
         // OpenDocument is a reference type.  Recreate these controls when its
