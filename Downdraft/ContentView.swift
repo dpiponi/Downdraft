@@ -22,6 +22,9 @@ struct ContentView: View {
     @State private var scrubbedPageIndex = 0
     @State private var pdfKitCurrentPageIndex: Int?
     @State private var requestedPageIndex: Int?
+    // PDFKit needs a distinct request for every explicit jump, including a
+    // second jump to a page that was requested previously.
+    @State private var requestedPageRequestID: UUID?
     @State private var bookmarkPageIndices: [Int?] = []
     // Forces SwiftUI to refresh history-button availability after mutating a
     // reference-type document's navigation history.
@@ -58,18 +61,30 @@ struct ContentView: View {
         }
     }
 
-    private var maximumBookmarkRailButtons: Int {
-        if isLandscapeInterface {
-            return isPhone ? 3 : 4
+    /// Calculates the thumbnail count from the actual reader height. The rail
+    /// grows upward from the fixed add button, but must never intrude into the
+    /// top controls (including the optional search row).
+    private func visibleBookmarkLimit(for readerHeight: CGFloat) -> Int {
+        if !isPhone {
+            let maximumButtons = isLandscapeInterface ? 4 : 6
+            let directCapacity = maximumButtons - 1
+            return visibleBookmarks.count > directCapacity ? directCapacity - 1 : directCapacity
         }
-        return isPhone ? 4 : 6
-    }
 
-    /// Includes space for the add control, and for the overflow control when
-    /// necessary, so the rail cannot collide with the bottom scrubber.
-    private var visibleBookmarkLimit: Int {
-        let directCapacity = maximumBookmarkRailButtons - 1
-        return visibleBookmarks.count > directCapacity ? directCapacity - 1 : directCapacity
+        let topControlsClearance: CGFloat = 180
+        let railBottomInset: CGFloat = 176
+        let railVerticalPadding: CGFloat = 16
+        let thumbnailHeight: CGFloat = 62
+        let addButtonHeight: CGFloat = 40
+        let spacing: CGFloat = 8
+        let availableHeight = max(0, readerHeight - topControlsClearance - railBottomInset)
+        let directCapacity = max(
+            1,
+            Int(((availableHeight - railVerticalPadding - addButtonHeight) / (thumbnailHeight + spacing)).rounded(.down))
+        )
+        return visibleBookmarks.count > directCapacity
+            ? max(1, directCapacity - 1)
+            : directCapacity
     }
 
     var body: some View {
@@ -224,6 +239,7 @@ struct ContentView: View {
                 searchSelection: isSelected ? currentSearchSelection : nil,
                 outlineDestination: isSelected ? outlineDestination : nil,
                 requestedPageIndex: isSelected ? requestedPageIndex : nil,
+                requestedPageRequestID: isSelected ? requestedPageRequestID : nil,
                 onPageChanged: { pageIndex in
                     updatePage(pageIndex, for: document.id)
                 },
@@ -262,7 +278,7 @@ struct ContentView: View {
         PageScrubber(
             pageIndex: scrubbedPageIndex,
             pageCount: document.pageCount,
-            seek: { requestedPageIndex = $0 },
+            seek: requestPage,
             commit: { sourcePageIndex, destinationPageIndex in
                 guard let selectedDocument else { return }
                 recordNavigation(
@@ -352,12 +368,12 @@ struct ContentView: View {
             }
             .transition(.move(edge: .top).combined(with: .opacity))
 
-            GeometryReader { _ in
+            GeometryReader { geometry in
                 VStack(spacing: 0) {
                     Spacer(minLength: 0)
                     HStack {
                         Spacer(minLength: 0)
-                        bookmarkControls
+                        bookmarkControls(visibleLimit: visibleBookmarkLimit(for: geometry.size.height))
                     }
                     // Match the scrubber capsule's trailing edge.  The
                     // stack grows upward while the add control stays put.
@@ -527,9 +543,9 @@ struct ContentView: View {
         .font(.title3.weight(.medium))
     }
 
-    private var bookmarkControls: some View {
+    private func bookmarkControls(visibleLimit: Int) -> some View {
         VStack(spacing: 8) {
-            ForEach(Array(visibleBookmarks.prefix(visibleBookmarkLimit)), id: \.index) { bookmark in
+            ForEach(Array(visibleBookmarks.prefix(visibleLimit)), id: \.index) { bookmark in
                 BookmarkSlotButton(
                     title: "\(visibleBookmarkNumber(for: bookmark.index))",
                     accessibilityLabel: "Bookmark \(visibleBookmarkNumber(for: bookmark.index))",
@@ -543,9 +559,9 @@ struct ContentView: View {
                 )
                 .frame(width: 44, height: 62)
             }
-            if visibleBookmarks.count > visibleBookmarkLimit {
+            if visibleBookmarks.count > visibleLimit {
                 Menu {
-                    ForEach(Array(visibleBookmarks.dropFirst(visibleBookmarkLimit)), id: \.index) { bookmark in
+                    ForEach(Array(visibleBookmarks.dropFirst(visibleLimit)), id: \.index) { bookmark in
                         Menu("Bookmark \(visibleBookmarkNumber(for: bookmark.index))") {
                             Button("Go to Page \(bookmark.pageIndex + 1)") {
                                 goToBookmark(at: bookmark.index)
@@ -826,6 +842,7 @@ struct ContentView: View {
         scrubbedPageIndex = document.lastPageIndex
         pdfKitCurrentPageIndex = document.lastPageIndex
         requestedPageIndex = nil
+        requestedPageRequestID = nil
         bookmarkPageIndices = document.bookmarkPageIndices
         RecentDocumentStore.record(
             id: document.id,
@@ -897,6 +914,7 @@ struct ContentView: View {
 
     private func goToBookmark(at index: Int) {
         guard let document = selectedDocument,
+              document.bookmarkPageIndices.indices.contains(index),
               let pageIndex = document.bookmarkPageIndices[index] else { return }
         navigate(to: pageIndex)
     }
@@ -1002,6 +1020,7 @@ struct ContentView: View {
             document.lastSelectedAt = Date()
             scrubbedPageIndex = pageIndex
             requestedPageIndex = nil
+            requestedPageRequestID = nil
         }
         saveDocuments()
     }
@@ -1009,7 +1028,16 @@ struct ContentView: View {
     private func navigate(to pageIndex: Int) {
         guard let document = selectedDocument else { return }
         recordNavigation(in: document, from: document.lastPageIndex, to: pageIndex)
+        // Move the scrubber at once; PDFKit's page-change notification can
+        // arrive late, or not at all for a request to the already-visible page.
+        scrubbedPageIndex = pageIndex
+        scrubberRevision += 1
+        requestPage(pageIndex)
+    }
+
+    private func requestPage(_ pageIndex: Int) {
         requestedPageIndex = pageIndex
+        requestedPageRequestID = UUID()
     }
 
     private func recordNavigation(to selection: PDFSelection?) {
@@ -1032,7 +1060,7 @@ struct ContentView: View {
         navigationRevision += 1
         scrubbedPageIndex = pageIndex
         scrubberRevision += 1
-        requestedPageIndex = pageIndex
+        requestPage(pageIndex)
     }
 
     private func navigateForward(in document: OpenDocument) {
@@ -1040,7 +1068,7 @@ struct ContentView: View {
         navigationRevision += 1
         scrubbedPageIndex = pageIndex
         scrubberRevision += 1
-        requestedPageIndex = pageIndex
+        requestPage(pageIndex)
     }
 
     private func saveDocuments() {
@@ -1073,7 +1101,7 @@ struct ContentView: View {
         if state.page.index != previousPage {
             scrubbedPageIndex = state.page.index
             scrubberRevision += 1
-            requestedPageIndex = state.page.index
+            requestPage(state.page.index)
             RecentDocumentStore.updateReadingPosition(
                 bookmarkData: document.bookmarkData,
                 pageIndex: state.page.index,
