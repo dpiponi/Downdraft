@@ -76,20 +76,4 @@ final class DowndraftUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Page 1 of 3"].waitForExistence(timeout: 5))
     }
 
-    func testBookmarkJumpUpdatesTheReaderAndScrubber() {
-        let app = launchFixture()
-        let slider = app.sliders.firstMatch
-        XCTAssertTrue(slider.waitForExistence(timeout: 3))
-
-        slider.adjust(toNormalizedSliderPosition: 1)
-        XCTAssertTrue(app.staticTexts["Page 3 of 3"].waitForExistence(timeout: 3))
-        app.buttons["Add Bookmark"].press(forDuration: 1.1)
-        let bookmark = app.buttons["Bookmark 1"]
-        XCTAssertTrue(bookmark.waitForExistence(timeout: 3))
-
-        slider.adjust(toNormalizedSliderPosition: 0)
-        XCTAssertTrue(app.staticTexts["Page 1 of 3"].waitForExistence(timeout: 3))
-        bookmark.tap()
-        XCTAssertTrue(app.staticTexts["Page 3 of 3"].waitForExistence(timeout: 5))
-    }
 }

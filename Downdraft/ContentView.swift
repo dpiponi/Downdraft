@@ -22,9 +22,6 @@ struct ContentView: View {
     @State private var scrubbedPageIndex = 0
     @State private var pdfKitCurrentPageIndex: Int?
     @State private var requestedPageIndex: Int?
-    // PDFKit needs a distinct request for every explicit jump, including a
-    // second jump to a page that was requested previously.
-    @State private var requestedPageRequestID: UUID?
     @State private var bookmarkPageIndices: [Int?] = []
     // Forces SwiftUI to refresh history-button availability after mutating a
     // reference-type document's navigation history.
@@ -233,7 +230,6 @@ struct ContentView: View {
                 searchSelection: isSelected ? currentSearchSelection : nil,
                 outlineDestination: isSelected ? outlineDestination : nil,
                 requestedPageIndex: isSelected ? requestedPageIndex : nil,
-                requestedPageRequestID: isSelected ? requestedPageRequestID : nil,
                 onPageChanged: { pageIndex in
                     updatePage(pageIndex, for: document.id)
                 },
@@ -272,7 +268,7 @@ struct ContentView: View {
         PageScrubber(
             pageIndex: scrubbedPageIndex,
             pageCount: document.pageCount,
-            seek: requestPage,
+            seek: { requestedPageIndex = $0 },
             commit: { sourcePageIndex, destinationPageIndex in
                 guard let selectedDocument else { return }
                 recordNavigation(
@@ -836,7 +832,6 @@ struct ContentView: View {
         scrubbedPageIndex = document.lastPageIndex
         pdfKitCurrentPageIndex = document.lastPageIndex
         requestedPageIndex = nil
-        requestedPageRequestID = nil
         bookmarkPageIndices = document.bookmarkPageIndices
         RecentDocumentStore.record(
             id: document.id,
@@ -1014,7 +1009,6 @@ struct ContentView: View {
             document.lastSelectedAt = Date()
             scrubbedPageIndex = pageIndex
             requestedPageIndex = nil
-            requestedPageRequestID = nil
         }
         saveDocuments()
     }
@@ -1022,16 +1016,7 @@ struct ContentView: View {
     private func navigate(to pageIndex: Int) {
         guard let document = selectedDocument else { return }
         recordNavigation(in: document, from: document.lastPageIndex, to: pageIndex)
-        // Move the scrubber at once; PDFKit's page-change notification can
-        // arrive late, or not at all for a request to the already-visible page.
-        scrubbedPageIndex = pageIndex
-        scrubberRevision += 1
-        requestPage(pageIndex)
-    }
-
-    private func requestPage(_ pageIndex: Int) {
         requestedPageIndex = pageIndex
-        requestedPageRequestID = UUID()
     }
 
     private func recordNavigation(to selection: PDFSelection?) {
@@ -1054,7 +1039,7 @@ struct ContentView: View {
         navigationRevision += 1
         scrubbedPageIndex = pageIndex
         scrubberRevision += 1
-        requestPage(pageIndex)
+        requestedPageIndex = pageIndex
     }
 
     private func navigateForward(in document: OpenDocument) {
@@ -1062,7 +1047,7 @@ struct ContentView: View {
         navigationRevision += 1
         scrubbedPageIndex = pageIndex
         scrubberRevision += 1
-        requestPage(pageIndex)
+        requestedPageIndex = pageIndex
     }
 
     private func saveDocuments() {
@@ -1095,7 +1080,7 @@ struct ContentView: View {
         if state.page.index != previousPage {
             scrubbedPageIndex = state.page.index
             scrubberRevision += 1
-            requestPage(state.page.index)
+            requestedPageIndex = state.page.index
             RecentDocumentStore.updateReadingPosition(
                 bookmarkData: document.bookmarkData,
                 pageIndex: state.page.index,
