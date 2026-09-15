@@ -1103,6 +1103,12 @@ private struct PageScrubber: View {
                 value: Binding(
                     get: { Double(pendingPageIndex ?? pageIndex) },
                     set: { newValue in
+                        // Some slider interactions deliver their first value
+                        // before `onEditingChanged(true)`. Capture the origin
+                        // here as well, before asking PDFKit to change pages.
+                        if pageIndexWhenScrubbingBegan == nil {
+                            pageIndexWhenScrubbingBegan = pageIndex
+                        }
                         let newPageIndex = Int(newValue.rounded())
                         pendingPageIndex = newPageIndex
                         seek(newPageIndex)
@@ -1112,7 +1118,9 @@ private struct PageScrubber: View {
                 step: 1,
                 onEditingChanged: { isEditing in
                     if isEditing {
-                        pageIndexWhenScrubbingBegan = pageIndex
+                        if pageIndexWhenScrubbingBegan == nil {
+                            pageIndexWhenScrubbingBegan = pageIndex
+                        }
                         pendingPageIndex = pageIndex
                         return
                     }
