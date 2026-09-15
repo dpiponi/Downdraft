@@ -85,6 +85,8 @@ struct PDFDocumentView: UIViewRepresentable {
         private var pendingSearchHighlight: PDFSelection?
         private var displayedOutlineDestination: PDFDestination?
         private var displayedRequestedPageRequestID: UUID?
+        private var pendingInteractivePageRequest: (pageIndex: Int, requestID: UUID?)?
+        private var hasScheduledInteractivePageRequest = false
         private weak var readerTapGesture: UITapGestureRecognizer?
         private weak var searchHighlightOverlay: SearchMatchOverlayView?
         private weak var observedPDFView: PDFView?
@@ -317,9 +319,23 @@ struct PDFDocumentView: UIViewRepresentable {
             guard displayedRequestedPageRequestID != requestID else { return }
             displayedRequestedPageRequestID = requestID
             if isInteractive {
-                // A scrubber is directly under the reader's finger. Go now;
-                // even one run-loop of deferral makes it feel disconnected.
-                performRequestedPageJump(pageIndex, requestID: requestID, in: pdfView)
+                // A slider drag may send scores of requests in one run-loop
+                // cycle. Run only the newest one, rather than making the PDF
+                // view laboriously visit every intermediate page.
+                pendingInteractivePageRequest = (pageIndex, requestID)
+                guard !hasScheduledInteractivePageRequest else { return }
+                hasScheduledInteractivePageRequest = true
+                DispatchQueue.main.async { [weak self, weak pdfView] in
+                    guard let self else { return }
+                    self.hasScheduledInteractivePageRequest = false
+                    guard let request = self.pendingInteractivePageRequest else { return }
+                    self.pendingInteractivePageRequest = nil
+                    self.performRequestedPageJump(
+                        request.pageIndex,
+                        requestID: request.requestID,
+                        in: pdfView
+                    )
+                }
                 return
             }
             // `PDFView.go(to:)` can synchronously publish a page change. Do
