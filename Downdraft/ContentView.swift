@@ -268,7 +268,10 @@ struct ContentView: View {
         PageScrubber(
             pageIndex: scrubbedPageIndex,
             pageCount: document.pageCount,
-            seek: { requestedPageIndex = $0 },
+            seek: { pageIndex in
+                PDFDocumentView.seekInteractively(to: pageIndex, in: document)
+                requestedPageIndex = pageIndex
+            },
             commit: { sourcePageIndex, destinationPageIndex in
                 guard let selectedDocument else { return }
                 recordNavigation(
