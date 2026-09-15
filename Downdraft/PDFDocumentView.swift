@@ -3,9 +3,6 @@ import SwiftUI
 import UIKit
 
 struct PDFDocumentView: UIViewRepresentable {
-    private static let interactivePageSeekNotification = Notification.Name("Downdraft.interactivePageSeek")
-    private static let interactivePageIndexKey = "pageIndex"
-
     let document: PDFDocument
     var initialPageIndex = 0
     var isReaderFocused = false
@@ -64,17 +61,6 @@ struct PDFDocumentView: UIViewRepresentable {
         Coordinator()
     }
 
-    /// Slider changes arrive while UIKit is tracking a finger, before SwiftUI
-    /// necessarily refreshes this representable. Send those changes directly
-    /// to its installed PDF view so the page follows the thumb immediately.
-    static func seekInteractively(to pageIndex: Int, in document: PDFDocument) {
-        NotificationCenter.default.post(
-            name: interactivePageSeekNotification,
-            object: document,
-            userInfo: [interactivePageIndexKey: pageIndex]
-        )
-    }
-
     @MainActor
     final class Coordinator: NSObject {
         var loadedDocument: PDFDocument?
@@ -125,16 +111,6 @@ struct PDFDocumentView: UIViewRepresentable {
             expectedNavigationPageIndex = pageIndex
         }
 
-        override init() {
-            super.init()
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(interactivePageSeekRequested(_:)),
-                name: PDFDocumentView.interactivePageSeekNotification,
-                object: nil
-            )
-        }
-
         func install(_ document: PDFDocument, at pageIndex: Int, in pdfView: PDFView) {
             // Assigning a PDFDocument always makes PDFKit briefly announce its
             // first page, even when we immediately go to a saved page.  That
@@ -158,19 +134,6 @@ struct PDFDocumentView: UIViewRepresentable {
                 self.publishReadingPage(in: pdfView)
                 self.startObservingSearchHighlightDismissal(in: pdfView)
             }
-        }
-
-        @objc private func interactivePageSeekRequested(_ notification: Notification) {
-            guard let document = notification.object as? PDFDocument,
-                  document === loadedDocument,
-                  let pageIndex = notification.userInfo?[PDFDocumentView.interactivePageIndexKey] as? Int,
-                  let pdfView = observedPDFView,
-                  let page = pdfView.document?.page(at: pageIndex) else { return }
-            // Also consume the matching SwiftUI request so its later update
-            // does not make PDFKit repeat the same jump.
-            displayedRequestedPageIndex = pageIndex
-            expectNavigation(to: pageIndex)
-            pdfView.go(to: page)
         }
         func startObservingPageChanges(in pdfView: PDFView) {
             NotificationCenter.default.addObserver(

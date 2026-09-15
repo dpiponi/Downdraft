@@ -58,24 +58,18 @@ struct ContentView: View {
         }
     }
 
-    /// Calculates the thumbnail count from the actual reader height. The rail
-    /// grows upward from the fixed add button, but must never intrude into the
-    /// top controls (including the optional search row).
-    private func visibleBookmarkLimit(for readerHeight: CGFloat) -> Int {
-        let topControlsClearance: CGFloat = isPhone ? 180 : 140
-        let railBottomInset: CGFloat = isPhone ? 176 : 144
-        let railVerticalPadding: CGFloat = 16
-        let thumbnailHeight: CGFloat = 62
-        let addButtonHeight: CGFloat = 40
-        let spacing: CGFloat = 8
-        let availableHeight = max(0, readerHeight - topControlsClearance - railBottomInset)
-        let directCapacity = max(
-            1,
-            Int(((availableHeight - railVerticalPadding - addButtonHeight) / (thumbnailHeight + spacing)).rounded(.down))
-        )
-        return visibleBookmarks.count > directCapacity
-            ? max(1, directCapacity - 1)
-            : directCapacity
+    private var maximumBookmarkRailButtons: Int {
+        if isLandscapeInterface {
+            return isPhone ? 3 : 4
+        }
+        return isPhone ? 4 : 6
+    }
+
+    /// Includes space for the add control, and for the overflow control when
+    /// necessary, so the rail cannot collide with the bottom scrubber.
+    private var visibleBookmarkLimit: Int {
+        let directCapacity = maximumBookmarkRailButtons - 1
+        return visibleBookmarks.count > directCapacity ? directCapacity - 1 : directCapacity
     }
 
     var body: some View {
@@ -268,10 +262,7 @@ struct ContentView: View {
         PageScrubber(
             pageIndex: scrubbedPageIndex,
             pageCount: document.pageCount,
-            seek: { pageIndex in
-                PDFDocumentView.seekInteractively(to: pageIndex, in: document)
-                requestedPageIndex = pageIndex
-            },
+            seek: { requestedPageIndex = $0 },
             commit: { sourcePageIndex, destinationPageIndex in
                 guard let selectedDocument else { return }
                 recordNavigation(
@@ -361,12 +352,12 @@ struct ContentView: View {
             }
             .transition(.move(edge: .top).combined(with: .opacity))
 
-            GeometryReader { geometry in
+            GeometryReader { _ in
                 VStack(spacing: 0) {
                     Spacer(minLength: 0)
                     HStack {
                         Spacer(minLength: 0)
-                        bookmarkControls(visibleLimit: visibleBookmarkLimit(for: geometry.size.height))
+                        bookmarkControls
                     }
                     // Match the scrubber capsule's trailing edge.  The
                     // stack grows upward while the add control stays put.
@@ -536,9 +527,9 @@ struct ContentView: View {
         .font(.title3.weight(.medium))
     }
 
-    private func bookmarkControls(visibleLimit: Int) -> some View {
+    private var bookmarkControls: some View {
         VStack(spacing: 8) {
-            ForEach(Array(visibleBookmarks.prefix(visibleLimit)), id: \.index) { bookmark in
+            ForEach(Array(visibleBookmarks.prefix(visibleBookmarkLimit)), id: \.index) { bookmark in
                 BookmarkSlotButton(
                     title: "\(visibleBookmarkNumber(for: bookmark.index))",
                     accessibilityLabel: "Bookmark \(visibleBookmarkNumber(for: bookmark.index))",
@@ -552,9 +543,9 @@ struct ContentView: View {
                 )
                 .frame(width: 44, height: 62)
             }
-            if visibleBookmarks.count > visibleLimit {
+            if visibleBookmarks.count > visibleBookmarkLimit {
                 Menu {
-                    ForEach(Array(visibleBookmarks.dropFirst(visibleLimit)), id: \.index) { bookmark in
+                    ForEach(Array(visibleBookmarks.dropFirst(visibleBookmarkLimit)), id: \.index) { bookmark in
                         Menu("Bookmark \(visibleBookmarkNumber(for: bookmark.index))") {
                             Button("Go to Page \(bookmark.pageIndex + 1)") {
                                 goToBookmark(at: bookmark.index)
@@ -906,7 +897,6 @@ struct ContentView: View {
 
     private func goToBookmark(at index: Int) {
         guard let document = selectedDocument,
-              document.bookmarkPageIndices.indices.contains(index),
               let pageIndex = document.bookmarkPageIndices[index] else { return }
         navigate(to: pageIndex)
     }

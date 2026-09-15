@@ -75,5 +75,4 @@ final class DowndraftUITests: XCTestCase {
         app.buttons["Back"].tap()
         XCTAssertTrue(app.staticTexts["Page 1 of 3"].waitForExistence(timeout: 5))
     }
-
 }
