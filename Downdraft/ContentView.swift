@@ -262,7 +262,7 @@ struct ContentView: View {
         PageScrubber(
             pageIndex: scrubbedPageIndex,
             pageCount: document.pageCount,
-            seek: { navigate(to: $0, recordingNavigation: false) },
+            seek: { requestedPageIndex = $0 },
             commit: { sourcePageIndex, destinationPageIndex in
                 guard let selectedDocument else { return }
                 recordNavigation(
@@ -1006,11 +1006,9 @@ struct ContentView: View {
         saveDocuments()
     }
 
-    private func navigate(to pageIndex: Int, recordingNavigation: Bool = true) {
+    private func navigate(to pageIndex: Int) {
         guard let document = selectedDocument else { return }
-        if recordingNavigation {
-            recordNavigation(in: document, from: document.lastPageIndex, to: pageIndex)
-        }
+        recordNavigation(in: document, from: document.lastPageIndex, to: pageIndex)
         requestedPageIndex = pageIndex
     }
 
@@ -1092,7 +1090,7 @@ private struct PageScrubber: View {
     let seek: (Int) -> Void
     let commit: (Int, Int) -> Void
     @State private var pageIndexWhenScrubbingBegan: Int?
-    @State private var lastRequestedPageIndex: Int?
+    @State private var pendingPageIndex: Int?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -1103,10 +1101,16 @@ private struct PageScrubber: View {
 
             Slider(
                 value: Binding(
-                    get: { Double(pageIndex) },
+                    get: { Double(pendingPageIndex ?? pageIndex) },
                     set: { newValue in
+                        // Some slider interactions deliver their first value
+                        // before `onEditingChanged(true)`. Capture the origin
+                        // here as well, before asking PDFKit to change pages.
+                        if pageIndexWhenScrubbingBegan == nil {
+                            pageIndexWhenScrubbingBegan = pageIndex
+                        }
                         let newPageIndex = Int(newValue.rounded())
-                        lastRequestedPageIndex = newPageIndex
+                        pendingPageIndex = newPageIndex
                         seek(newPageIndex)
                     }
                 ),
@@ -1114,21 +1118,31 @@ private struct PageScrubber: View {
                 step: 1,
                 onEditingChanged: { isEditing in
                     if isEditing {
-                        pageIndexWhenScrubbingBegan = pageIndex
-                        lastRequestedPageIndex = pageIndex
+                        if pageIndexWhenScrubbingBegan == nil {
+                            pageIndexWhenScrubbingBegan = pageIndex
+                        }
+                        pendingPageIndex = pageIndex
                         return
                     }
 
                     let sourcePageIndex = pageIndexWhenScrubbingBegan ?? pageIndex
-                    let destinationPageIndex = lastRequestedPageIndex ?? pageIndex
+                    let destinationPageIndex = pendingPageIndex ?? pageIndex
                     commit(sourcePageIndex, destinationPageIndex)
                     pageIndexWhenScrubbingBegan = nil
-                    lastRequestedPageIndex = nil
+                    pendingPageIndex = nil
                 }
             )
         }
         .padding(.horizontal)
         .padding(.vertical, 10)
+        .onChange(of: pageIndex) { _, _ in
+            // Outside an active drag, the PDF view is authoritative.  This
+            // covers links, contents, search, history, bookmarks, and
+            // ordinary scrolling as well as direct scrubber moves.
+            if pageIndexWhenScrubbingBegan == nil {
+                pendingPageIndex = nil
+            }
+        }
     }
 }
 
