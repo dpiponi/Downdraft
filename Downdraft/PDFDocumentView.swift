@@ -13,7 +13,6 @@ struct PDFDocumentView: UIViewRepresentable {
     var outlineDestination: PDFDestination?
     var requestedPageIndex: Int?
     var requestedPageRequestID: UUID?
-    var isInteractivePageRequest = false
     var onPageChanged: (Int) -> Void = { _ in }
     var onPDFKitCurrentPageChanged: (Int) -> Void = { _ in }
     var onJumpToFirstPage: (Int, Int) -> Void = { _, _ in }
@@ -52,7 +51,6 @@ struct PDFDocumentView: UIViewRepresentable {
         context.coordinator.updateRequestedPage(
             requestedPageIndex,
             requestID: requestedPageRequestID,
-            isInteractive: isInteractivePageRequest,
             in: pdfView
         )
         context.coordinator.updatePageLayout(
@@ -85,8 +83,6 @@ struct PDFDocumentView: UIViewRepresentable {
         private var pendingSearchHighlight: PDFSelection?
         private var displayedOutlineDestination: PDFDestination?
         private var displayedRequestedPageRequestID: UUID?
-        private var pendingInteractivePageRequest: (pageIndex: Int, requestID: UUID?)?
-        private var hasScheduledInteractivePageRequest = false
         private weak var readerTapGesture: UITapGestureRecognizer?
         private weak var searchHighlightOverlay: SearchMatchOverlayView?
         private weak var observedPDFView: PDFView?
@@ -306,57 +302,25 @@ struct PDFDocumentView: UIViewRepresentable {
             }
         }
 
-        func updateRequestedPage(
-            _ pageIndex: Int?,
-            requestID: UUID?,
-            isInteractive: Bool,
-            in pdfView: PDFView
-        ) {
+        func updateRequestedPage(_ pageIndex: Int?, requestID: UUID?, in pdfView: PDFView) {
             guard let pageIndex else {
                 displayedRequestedPageRequestID = nil
                 return
             }
             guard displayedRequestedPageRequestID != requestID else { return }
             displayedRequestedPageRequestID = requestID
-            if isInteractive {
-                // A slider drag may send scores of requests in one run-loop
-                // cycle. Run only the newest one, rather than making the PDF
-                // view laboriously visit every intermediate page.
-                pendingInteractivePageRequest = (pageIndex, requestID)
-                guard !hasScheduledInteractivePageRequest else { return }
-                hasScheduledInteractivePageRequest = true
-                DispatchQueue.main.async { [weak self, weak pdfView] in
-                    guard let self else { return }
-                    self.hasScheduledInteractivePageRequest = false
-                    guard let request = self.pendingInteractivePageRequest else { return }
-                    self.pendingInteractivePageRequest = nil
-                    self.performRequestedPageJump(
-                        request.pageIndex,
-                        requestID: request.requestID,
-                        in: pdfView
-                    )
-                }
-                return
-            }
             // `PDFView.go(to:)` can synchronously publish a page change. Do
             // not let that callback mutate SwiftUI state during this
             // representable's update pass; it is the source of intermittent
             // stale scrubber positions after bookmark jumps.
             DispatchQueue.main.async { [weak self, weak pdfView] in
-                self?.performRequestedPageJump(pageIndex, requestID: requestID, in: pdfView)
+                guard let self,
+                      self.displayedRequestedPageRequestID == requestID,
+                      let pdfView,
+                      let page = pdfView.document?.page(at: pageIndex) else { return }
+                self.expectNavigation(to: pageIndex)
+                pdfView.go(to: page)
             }
-        }
-
-        private func performRequestedPageJump(
-            _ pageIndex: Int,
-            requestID: UUID?,
-            in pdfView: PDFView?
-        ) {
-            guard displayedRequestedPageRequestID == requestID,
-                  let pdfView,
-                  let page = pdfView.document?.page(at: pageIndex) else { return }
-            expectNavigation(to: pageIndex)
-            pdfView.go(to: page)
         }
 
         @MainActor @objc private func pageChanged(_ notification: Notification) {
