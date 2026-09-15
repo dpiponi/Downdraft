@@ -65,14 +65,8 @@ struct ContentView: View {
     /// grows upward from the fixed add button, but must never intrude into the
     /// top controls (including the optional search row).
     private func visibleBookmarkLimit(for readerHeight: CGFloat) -> Int {
-        if !isPhone {
-            let maximumButtons = isLandscapeInterface ? 4 : 6
-            let directCapacity = maximumButtons - 1
-            return visibleBookmarks.count > directCapacity ? directCapacity - 1 : directCapacity
-        }
-
-        let topControlsClearance: CGFloat = 180
-        let railBottomInset: CGFloat = 176
+        let topControlsClearance: CGFloat = isPhone ? 180 : 140
+        let railBottomInset: CGFloat = isPhone ? 176 : 144
         let railVerticalPadding: CGFloat = 16
         let thumbnailHeight: CGFloat = 62
         let addButtonHeight: CGFloat = 40
