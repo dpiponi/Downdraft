@@ -25,7 +25,7 @@ struct ContentView: View {
     // PDFKit needs a distinct request for every explicit jump, including a
     // second jump to a page that was requested previously.
     @State private var requestedPageRequestID: UUID?
-    @State private var isScrubbing = false
+    @State private var requestedPageIsInteractive = false
     @State private var bookmarkPageIndices: [Int?] = []
     // Forces SwiftUI to refresh history-button availability after mutating a
     // reference-type document's navigation history.
@@ -235,7 +235,7 @@ struct ContentView: View {
                 outlineDestination: isSelected ? outlineDestination : nil,
                 requestedPageIndex: isSelected ? requestedPageIndex : nil,
                 requestedPageRequestID: isSelected ? requestedPageRequestID : nil,
-                isInteractivePageRequest: isSelected && isScrubbing,
+                isInteractivePageRequest: isSelected && requestedPageIsInteractive,
                 onPageChanged: { pageIndex in
                     updatePage(pageIndex, for: document.id)
                 },
@@ -274,8 +274,7 @@ struct ContentView: View {
         PageScrubber(
             pageIndex: scrubbedPageIndex,
             pageCount: document.pageCount,
-            seek: requestPage,
-            onScrubbingChanged: { isScrubbing = $0 },
+            seek: { requestPage($0, interactively: true) },
             commit: { sourcePageIndex, destinationPageIndex in
                 guard let selectedDocument else { return }
                 recordNavigation(
@@ -840,6 +839,7 @@ struct ContentView: View {
         pdfKitCurrentPageIndex = document.lastPageIndex
         requestedPageIndex = nil
         requestedPageRequestID = nil
+        requestedPageIsInteractive = false
         bookmarkPageIndices = document.bookmarkPageIndices
         RecentDocumentStore.record(
             id: document.id,
@@ -1018,6 +1018,7 @@ struct ContentView: View {
             scrubbedPageIndex = pageIndex
             requestedPageIndex = nil
             requestedPageRequestID = nil
+            requestedPageIsInteractive = false
         }
         saveDocuments()
     }
@@ -1032,9 +1033,10 @@ struct ContentView: View {
         requestPage(pageIndex)
     }
 
-    private func requestPage(_ pageIndex: Int) {
+    private func requestPage(_ pageIndex: Int, interactively: Bool = false) {
         requestedPageIndex = pageIndex
         requestedPageRequestID = UUID()
+        requestedPageIsInteractive = interactively
     }
 
     private func recordNavigation(to selection: PDFSelection?) {
@@ -1113,7 +1115,6 @@ private struct PageScrubber: View {
     let pageIndex: Int
     let pageCount: Int
     let seek: (Int) -> Void
-    let onScrubbingChanged: (Bool) -> Void
     let commit: (Int, Int) -> Void
     @State private var pageIndexWhenScrubbingBegan: Int?
     @State private var pendingPageIndex: Int?
@@ -1143,7 +1144,6 @@ private struct PageScrubber: View {
                 in: 0...Double(max(pageCount - 1, 0)),
                 step: 1,
                 onEditingChanged: { isEditing in
-                    onScrubbingChanged(isEditing)
                     if isEditing {
                         if pageIndexWhenScrubbingBegan == nil {
                             pageIndexWhenScrubbingBegan = pageIndex
