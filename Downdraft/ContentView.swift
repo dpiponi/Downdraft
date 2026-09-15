@@ -1127,14 +1127,6 @@ private struct PageScrubber: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 10)
-        .onChange(of: pageIndex) { _, _ in
-            // Outside an active drag, the PDF view is authoritative.  This
-            // covers links, contents, search, history, bookmarks, and
-            // ordinary scrolling as well as direct scrubber moves.
-            if pageIndexWhenScrubbingBegan == nil {
-                pendingPageIndex = nil
-            }
-        }
     }
 }
 
