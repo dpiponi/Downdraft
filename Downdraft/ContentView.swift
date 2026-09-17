@@ -34,6 +34,7 @@ struct ContentView: View {
     @State private var isSearchPresented = false
     @FocusState private var isSearchFieldFocused: Bool
     @State private var bookmarkPreview: UIImage?
+    @State private var bookmarkPreviewPageIndex: Int?
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -378,23 +379,34 @@ struct ContentView: View {
             .transition(.move(edge: .trailing).combined(with: .opacity))
 
             if let bookmarkPreview {
-                Image(uiImage: bookmarkPreview)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: isPhone ? 180 : 220, height: isPhone ? 252 : 308)
-                    .background(.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(.white.opacity(0.5), lineWidth: 1)
+                VStack(spacing: 0) {
+                    Image(uiImage: bookmarkPreview)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: isPhone ? 180 : 220, height: isPhone ? 252 : 308)
+
+                    if let bookmarkPreviewPageIndex {
+                        Text("Page \(bookmarkPreviewPageIndex + 1)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(.black.opacity(0.78))
                     }
-                    .shadow(color: .black.opacity(0.65), radius: 18, y: 8)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                    .padding(.trailing, isPhone ? 90 : 100)
-                    .padding(.bottom, isPhone ? 168 : 130)
-                    .allowsHitTesting(false)
-                    .transition(.opacity.combined(with: .scale(scale: 0.88)))
-                    .zIndex(10)
+                }
+                .background(.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(.white.opacity(0.5), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.65), radius: 18, y: 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(.trailing, isPhone ? 90 : 100)
+                .padding(.bottom, isPhone ? 168 : 130)
+                .allowsHitTesting(false)
+                .transition(.opacity.combined(with: .scale(scale: 0.88)))
+                .zIndex(10)
             }
 
             VStack(spacing: 0) {
@@ -549,7 +561,10 @@ struct ContentView: View {
                     goToBookmark: { goToBookmark(at: bookmark.index) },
                     storeBookmark: { storeBookmark(at: bookmark.index) },
                     removeBookmark: { removeBookmark(at: bookmark.index) },
-                    preview: { bookmarkPreview = $0 }
+                    preview: { image in
+                        bookmarkPreview = image
+                        bookmarkPreviewPageIndex = image == nil ? nil : bookmark.pageIndex
+                    }
                 )
                 .frame(width: 44, height: 62)
             }
@@ -580,7 +595,10 @@ struct ContentView: View {
                 goToBookmark: { },
                 storeBookmark: addBookmark,
                 removeBookmark: nil,
-                preview: { bookmarkPreview = $0 }
+                preview: { image in
+                    bookmarkPreview = image
+                    bookmarkPreviewPageIndex = nil
+                }
             )
             .frame(width: 40, height: 40)
         }
