@@ -391,7 +391,7 @@ struct ContentView: View {
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
-                                .background(.black.opacity(0.78), in: Capsule())
+                                .background(.black.opacity(0.52), in: Capsule())
                                 .padding(.bottom, 8)
                         }
                     }
