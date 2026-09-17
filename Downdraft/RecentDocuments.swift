@@ -57,12 +57,7 @@ enum RecentDocumentStore {
         )
         var updated = documents.filter { $0.bookmarkData != bookmarkData }
         updated.insert(recentDocument, at: 0)
-        let encoder = JSONEncoder()
-        guard let data = try? encoder.encode(Array(updated.prefix(4))) else { return }
-        if let url = recentDocumentsURL {
-            try? data.write(to: url, options: .atomic)
-        }
-        WidgetCenter.shared.reloadAllTimelines()
+        write(updated)
     }
 
     static func updateReadingPosition(bookmarkData: Data, pageIndex: Int, pageCount: Int? = nil) {

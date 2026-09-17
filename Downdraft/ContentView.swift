@@ -4,6 +4,11 @@ import UIKit
 import WidgetKit
 import UniformTypeIdentifiers
 
+private struct BookmarkPreview {
+    let image: UIImage
+    let pageIndex: Int
+}
+
 struct ContentView: View {
     @State private var documents = OpenDocument.restoreSavedDocuments()
     @State private var selectedDocumentID: OpenDocument.ID?
@@ -33,8 +38,7 @@ struct ContentView: View {
     @State private var deviceOrientation = UIDevice.current.orientation
     @State private var isSearchPresented = false
     @FocusState private var isSearchFieldFocused: Bool
-    @State private var bookmarkPreview: UIImage?
-    @State private var bookmarkPreviewPageIndex: Int?
+    @State private var bookmarkPreview: BookmarkPreview?
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -379,21 +383,19 @@ struct ContentView: View {
             .transition(.move(edge: .trailing).combined(with: .opacity))
 
             if let bookmarkPreview {
-                Image(uiImage: bookmarkPreview)
+                Image(uiImage: bookmarkPreview.image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: isPhone ? 180 : 220, height: isPhone ? 252 : 308)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(alignment: .bottom) {
-                        if let bookmarkPreviewPageIndex {
-                            Text("Page \(bookmarkPreviewPageIndex + 1)")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(.black.opacity(0.52), in: Capsule())
-                                .padding(.bottom, 12)
-                        }
+                        Text("Page \(bookmarkPreview.pageIndex + 1)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(.black.opacity(0.52), in: Capsule())
+                            .padding(.bottom, 12)
                     }
                     .shadow(color: .black.opacity(0.65), radius: 18, y: 8)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
@@ -557,8 +559,9 @@ struct ContentView: View {
                     storeBookmark: { storeBookmark(at: bookmark.index) },
                     removeBookmark: { removeBookmark(at: bookmark.index) },
                     preview: { image in
-                        bookmarkPreview = image
-                        bookmarkPreviewPageIndex = image == nil ? nil : bookmark.pageIndex
+                        bookmarkPreview = image.map {
+                            BookmarkPreview(image: $0, pageIndex: bookmark.pageIndex)
+                        }
                     }
                 )
                 .frame(width: 44, height: 62)
@@ -590,9 +593,8 @@ struct ContentView: View {
                 goToBookmark: { },
                 storeBookmark: addBookmark,
                 removeBookmark: nil,
-                preview: { image in
-                    bookmarkPreview = image
-                    bookmarkPreviewPageIndex = nil
+                preview: { _ in
+                    bookmarkPreview = nil
                 }
             )
             .frame(width: 40, height: 40)
@@ -934,16 +936,7 @@ struct ContentView: View {
         }) else { return false }
         document.bookmarkPageIndices[index] = document.lastPageIndex
         bookmarkPageIndices[index] = document.lastPageIndex
-        if let identity = document.readingStateIdentity {
-            ReadingStateStore.saveBookmark(
-                document.lastPageIndex,
-                at: index,
-                for: identity,
-                fallbackPageIndex: document.lastPageIndex,
-                fallbackBookmarks: document.bookmarkPageIndices
-            )
-        }
-        saveDocuments()
+        persistBookmark(document.lastPageIndex, at: index, in: document)
         return true
     }
 
@@ -954,16 +947,7 @@ struct ContentView: View {
         document.bookmarkPageIndices.append(pageIndex)
         bookmarkPageIndices = document.bookmarkPageIndices
         let index = document.bookmarkPageIndices.index(before: document.bookmarkPageIndices.endIndex)
-        if let identity = document.readingStateIdentity {
-            ReadingStateStore.saveBookmark(
-                pageIndex,
-                at: index,
-                for: identity,
-                fallbackPageIndex: document.lastPageIndex,
-                fallbackBookmarks: document.bookmarkPageIndices
-            )
-        }
-        saveDocuments()
+        persistBookmark(pageIndex, at: index, in: document)
         return true
     }
 
@@ -972,9 +956,13 @@ struct ContentView: View {
               document.bookmarkPageIndices.indices.contains(index) else { return }
         document.bookmarkPageIndices[index] = nil
         bookmarkPageIndices = document.bookmarkPageIndices
+        persistBookmark(nil, at: index, in: document)
+    }
+
+    private func persistBookmark(_ pageIndex: Int?, at index: Int, in document: OpenDocument) {
         if let identity = document.readingStateIdentity {
             ReadingStateStore.saveBookmark(
-                nil,
+                pageIndex,
                 at: index,
                 for: identity,
                 fallbackPageIndex: document.lastPageIndex,
@@ -1977,55 +1965,6 @@ private struct DocumentThumbnail: View {
         }
         .frame(width: 36, height: 48)
         .clipShape(RoundedRectangle(cornerRadius: 5))
-    }
-}
-
-private struct DocumentTabStrip: View {
-    let documents: [OpenDocument]
-    let selectedID: OpenDocument.ID?
-    let select: (OpenDocument.ID) -> Void
-    let close: (OpenDocument.ID) -> Void
-
-    var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 6) {
-                ForEach(documents) { document in
-                    HStack(spacing: 4) {
-                        Button {
-                            select(document.id)
-                        } label: {
-                            Text(document.displayName)
-                                .lineLimit(1)
-                                .frame(maxWidth: 180)
-                                .fontWeight(document.id == selectedID ? .medium : .regular)
-                        }
-                        .buttonStyle(.plain)
-
-                        Button {
-                            close(document.id)
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Close \(document.displayName)")
-                    }
-                    .padding(.vertical, 7)
-                    .padding(.leading, 10)
-                    .padding(.trailing, 7)
-                    .foregroundStyle(document.id == selectedID ? .primary : .secondary)
-                    .background(
-                        document.id == selectedID ? Color.primary.opacity(0.10) : Color.clear,
-                        in: Capsule()
-                    )
-                }
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 6)
-        }
-        .scrollIndicators(.hidden)
-        .background(.bar)
     }
 }
 
