@@ -395,10 +395,6 @@ struct ContentView: View {
                                 .padding(.bottom, 8)
                         }
                     }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(.white.opacity(0.5), lineWidth: 1)
-                    }
                     .shadow(color: .black.opacity(0.65), radius: 18, y: 8)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .padding(.trailing, isPhone ? 90 : 100)
