@@ -383,7 +383,6 @@ struct ContentView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: isPhone ? 180 : 220, height: isPhone ? 252 : 308)
-                    .background(.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(alignment: .bottom) {
                         if let bookmarkPreviewPageIndex {
