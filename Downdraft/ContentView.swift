@@ -991,7 +991,8 @@ struct ContentView: View {
                 at: index,
                 for: identity,
                 fallbackPageIndex: document.lastPageIndex,
-                fallbackBookmarks: document.bookmarkPageIndices
+                fallbackBookmarks: document.bookmarkPageIndices,
+                fallbackPageModifiedAt: document.lastPageModifiedAt
             )
         }
         saveDocuments()
@@ -1024,6 +1025,7 @@ struct ContentView: View {
         guard let document = documents.first(where: { $0.id == id }),
               document.lastPageIndex != pageIndex else { return }
         document.lastPageIndex = pageIndex
+        document.lastPageModifiedAt = Date()
         if let identity = document.readingStateIdentity {
             ReadingStateStore.savePage(
                 pageIndex,
@@ -1126,9 +1128,11 @@ struct ContentView: View {
         let state = ReadingStateStore.state(
             for: identity,
             fallbackPageIndex: document.lastPageIndex,
-            fallbackBookmarks: document.bookmarkPageIndices
+            fallbackBookmarks: document.bookmarkPageIndices,
+            fallbackPageModifiedAt: document.lastPageModifiedAt
         )
         document.lastPageIndex = state.page.index
+        document.lastPageModifiedAt = state.page.modifiedAt
         document.bookmarkPageIndices = state.bookmarks.map(\.pageIndex)
     }
 
@@ -1139,9 +1143,11 @@ struct ContentView: View {
         let state = ReadingStateStore.state(
             for: identity,
             fallbackPageIndex: previousPage,
-            fallbackBookmarks: document.bookmarkPageIndices
+            fallbackBookmarks: document.bookmarkPageIndices,
+            fallbackPageModifiedAt: document.lastPageModifiedAt
         )
         document.lastPageIndex = state.page.index
+        document.lastPageModifiedAt = state.page.modifiedAt
         document.bookmarkPageIndices = state.bookmarks.map(\.pageIndex)
         bookmarkPageIndices = document.bookmarkPageIndices
         if state.page.index != previousPage {
@@ -1663,6 +1669,7 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
     var readsHorizontally: Bool
     var bookmarkPageIndices: [Int?]
     var lastSelectedAt: Date
+    var lastPageModifiedAt: Date
     private var isAccessingFile: Bool
     private var navigationHistory: [Int]
     private var navigationHistoryIndex: Int
@@ -1712,6 +1719,7 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
         readsHorizontally: Bool = false,
         bookmarkPageIndices: [Int?] = [],
         lastSelectedAt: Date = .distantPast,
+        lastPageModifiedAt: Date = .distantPast,
         isAccessingFile: Bool
     ) {
         self.url = url
@@ -1724,6 +1732,7 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
         self.readsHorizontally = readsHorizontally
         self.bookmarkPageIndices = bookmarkPageIndices
         self.lastSelectedAt = lastSelectedAt
+        self.lastPageModifiedAt = lastPageModifiedAt
         self.isAccessingFile = isAccessingFile
         self.navigationHistory = [lastPageIndex]
         self.navigationHistoryIndex = 0
@@ -1901,6 +1910,7 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
         let readsHorizontally: Bool?
         let bookmarkPageIndices: [Int?]?
         let lastSelectedAt: Date?
+        let lastPageModifiedAt: Date?
     }
 
     private static let savedDocumentsKey = "openDocuments"
@@ -1917,7 +1927,8 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
                 displaysAsBook: $0.displaysAsBook,
                 readsHorizontally: $0.readsHorizontally,
                 bookmarkPageIndices: $0.bookmarkPageIndices,
-                lastSelectedAt: $0.lastSelectedAt
+                lastSelectedAt: $0.lastSelectedAt,
+                lastPageModifiedAt: $0.lastPageModifiedAt
             )
         }
         guard let data = try? JSONEncoder().encode(savedDocuments) else { return }
@@ -1952,6 +1963,7 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
                 readsHorizontally: savedDocument.readsHorizontally ?? false,
                 bookmarkPageIndices: savedDocument.bookmarkPageIndices ?? [],
                 lastSelectedAt: savedDocument.lastSelectedAt ?? .distantPast,
+                lastPageModifiedAt: savedDocument.lastPageModifiedAt ?? savedDocument.lastSelectedAt ?? .distantPast,
                 isAccessingFile: false
             )
         }

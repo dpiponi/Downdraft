@@ -49,4 +49,20 @@ final class ReadingStateStoreTests: XCTestCase {
 
         XCTAssertEqual(ReadingStateStore.merged(left, right).page.index, 7)
     }
+
+    func testSavedPageFallbackBeatsAnOlderCloudPage() {
+        let older = Date(timeIntervalSinceReferenceDate: 10)
+        let saved = Date(timeIntervalSinceReferenceDate: 20)
+        let cloud = ReadingStateStore.State(
+            page: .init(index: 1, modifiedAt: older, deviceID: "phone"),
+            bookmarks: []
+        )
+        let fallback = ReadingStateStore.State.initial(
+            pageIndex: 47,
+            bookmarks: [],
+            pageModifiedAt: saved
+        )
+
+        XCTAssertEqual(ReadingStateStore.merged(cloud, fallback).page.index, 47)
+    }
 }
