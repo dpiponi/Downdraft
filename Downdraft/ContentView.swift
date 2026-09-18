@@ -192,7 +192,13 @@ struct ContentView: View {
                 let documentID = OpenDocument.restoredSelectedDocumentID(in: documents)
                     ?? documents.first?.id
                 if let documentID {
-                    selectDocument(documentID)
+                    // Let SwiftUI draw its loading state before PDFKit opens
+                    // the remembered document. Large or cloud-backed PDFs can
+                    // otherwise make a cold launch look unresponsive.
+                    selectedDocumentID = documentID
+                    DispatchQueue.main.async {
+                        selectDocument(documentID)
+                    }
                 }
             }
         }
@@ -853,15 +859,8 @@ struct ContentView: View {
         requestedPageIndex = nil
         requestedPageRequestID = nil
         bookmarkPageIndices = document.bookmarkPageIndices
-        RecentDocumentStore.record(
-            id: document.id,
-            name: document.displayName,
-            bookmarkData: document.bookmarkData,
-            document: document.pdfDocument,
-            lastPageIndex: document.lastPageIndex,
-            pageCount: document.pdfDocument?.pageCount,
-            thumbnailCacheIdentity: document.readingStateIdentity
-        )
+        recordRecentDocument(document, rendersThumbnail: false)
+        scheduleRecentThumbnail(for: document.id)
         outlineDestination = nil
         clearSearch()
         saveDocuments()
@@ -1068,6 +1067,32 @@ struct ContentView: View {
 
     private func saveDocuments() {
         OpenDocument.save(documents, selectedDocumentID: selectedDocumentID)
+    }
+
+    private func recordRecentDocument(_ document: OpenDocument, rendersThumbnail: Bool) {
+        RecentDocumentStore.record(
+            id: document.id,
+            name: document.displayName,
+            bookmarkData: document.bookmarkData,
+            document: document.pdfDocument,
+            lastPageIndex: document.lastPageIndex,
+            pageCount: document.pdfDocument?.pageCount,
+            thumbnailCacheIdentity: document.readingStateIdentity,
+            rendersThumbnail: rendersThumbnail
+        )
+    }
+
+    private func scheduleRecentThumbnail(for documentID: OpenDocument.ID) {
+        // Rendering a PDF page is intentionally kept on the main thread for
+        // PDFKit stability, but it is not launch-critical. Defer it until the
+        // reader has had time to become visible.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            guard selectedDocumentID == documentID,
+                  let document = documents.first(where: { $0.id == documentID }) else {
+                return
+            }
+            recordRecentDocument(document, rendersThumbnail: true)
+        }
     }
 
     private func restoreSharedReadingState(for document: OpenDocument) {

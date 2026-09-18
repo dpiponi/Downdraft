@@ -37,9 +37,13 @@ enum RecentDocumentStore {
         document: PDFDocument?,
         lastPageIndex: Int? = nil,
         pageCount: Int? = nil,
-        thumbnailCacheIdentity: String? = nil
+        thumbnailCacheIdentity: String? = nil,
+        rendersThumbnail: Bool = true
     ) {
-        let thumbnailData = thumbnailData(for: document?.page(at: 0))
+        let existingThumbnail = documents.first(where: { $0.bookmarkData == bookmarkData })?.thumbnailData
+        let thumbnailData = rendersThumbnail
+            ? thumbnailData(for: document?.page(at: 0)) ?? existingThumbnail
+            : existingThumbnail
         if let thumbnailData {
             DocumentThumbnailCache.store(
                 thumbnailData,
