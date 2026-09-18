@@ -1933,10 +1933,11 @@ private struct DocumentSwitcherView: View {
                             } label: {
                                 Image(systemName: "folder")
                                     .font(.title3)
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(.white)
                                     .frame(width: 32, height: 32)
                             }
                             .buttonStyle(.borderless)
+                            .tint(.white)
                             .accessibilityLabel("Open folder containing \(document.displayName)")
                         }
 
