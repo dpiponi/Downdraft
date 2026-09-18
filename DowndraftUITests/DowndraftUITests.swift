@@ -93,13 +93,4 @@ final class DowndraftUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Page 3 of 3"].waitForExistence(timeout: 5))
     }
 
-    func testDocumentSwitcherOffersContainingFolder() {
-        let app = launchFixture()
-
-        app.buttons["Documents"].tap()
-        XCTAssertTrue(
-            app.buttons["Open folder containing Downdraft UI Fixture"]
-                .waitForExistence(timeout: 3)
-        )
-    }
 }

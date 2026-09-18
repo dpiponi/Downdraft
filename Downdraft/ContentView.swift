@@ -13,7 +13,6 @@ struct ContentView: View {
     @State private var documents = OpenDocument.restoreSavedDocuments()
     @State private var selectedDocumentID: OpenDocument.ID?
     @State private var isShowingFilePicker = false
-    @State private var filePickerDirectory: URL?
     @State private var isShowingDocumentSwitcher = false
     @State private var errorMessage: String?
     @State private var isReaderFocused = false
@@ -166,12 +165,12 @@ struct ContentView: View {
                 )
             }
         }
-        .sheet(isPresented: $isShowingFilePicker, onDismiss: {
-            filePickerDirectory = nil
-        }) {
-            PDFDocumentPicker(startingDirectory: filePickerDirectory, onResult: handleFileImport)
-                .ignoresSafeArea()
-        }
+        .fileImporter(
+            isPresented: $isShowingFilePicker,
+            allowedContentTypes: [.pdf],
+            allowsMultipleSelection: false,
+            onCompletion: handleFileImport
+        )
         .alert("Couldn’t Open PDF", isPresented: .init(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
@@ -445,7 +444,7 @@ struct ContentView: View {
     private var primaryReaderControls: some View {
         HStack(spacing: isPhone ? 8 : 18) {
             if !isPhone {
-                Button { presentFilePicker() } label: {
+                Button { isShowingFilePicker = true } label: {
                     Image(systemName: "folder")
                         .frame(width: 48, height: 48)
                         .contentShape(Rectangle())
@@ -497,7 +496,7 @@ struct ContentView: View {
                 }
                 .accessibilityLabel("Reader layout")
             } else {
-                Button { presentFilePicker() } label: {
+                Button { isShowingFilePicker = true } label: {
                     Image(systemName: "folder")
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
@@ -629,13 +628,7 @@ struct ContentView: View {
                 },
                 openPDF: {
                     isShowingDocumentSwitcher = false
-                    presentFilePicker()
-                },
-                openContainingDirectory: { id in
-                    isShowingDocumentSwitcher = false
-                    DispatchQueue.main.async {
-                        presentContainingDirectory(for: id)
-                    }
+                    isShowingFilePicker = true
                 },
                 close: close
             )
@@ -764,21 +757,6 @@ struct ContentView: View {
         case .failure(let error):
             errorMessage = error.localizedDescription
         }
-    }
-
-    private func presentFilePicker(startingIn directory: URL? = nil) {
-        filePickerDirectory = directory
-        isShowingFilePicker = true
-    }
-
-    private func presentContainingDirectory(for id: OpenDocument.ID) {
-        guard let document = documents.first(where: { $0.id == id }),
-              document.loadFileIfNeeded(),
-              let directory = document.url?.deletingLastPathComponent() else {
-            errorMessage = "Downdraft couldn’t reopen this PDF’s folder."
-            return
-        }
-        presentFilePicker(startingIn: directory)
     }
 
     #if DEBUG
@@ -1863,7 +1841,6 @@ private struct DocumentSwitcherView: View {
     let selectedID: OpenDocument.ID?
     let select: (OpenDocument.ID) -> Void
     let openPDF: () -> Void
-    let openContainingDirectory: (OpenDocument.ID) -> Void
     let close: (OpenDocument.ID) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -1924,18 +1901,6 @@ private struct DocumentSwitcherView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-
-                        Button {
-                            openContainingDirectory(document.id)
-                        } label: {
-                            Image(systemName: "folder")
-                                .font(.title3)
-                                .foregroundStyle(.white)
-                                .frame(width: 32, height: 32)
-                        }
-                        .buttonStyle(.borderless)
-                        .tint(.white)
-                        .accessibilityLabel("Open folder containing \(document.displayName)")
 
                         Button {
                             close(document.id)
