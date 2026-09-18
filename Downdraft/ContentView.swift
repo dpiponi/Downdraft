@@ -631,10 +631,10 @@ struct ContentView: View {
                     isShowingDocumentSwitcher = false
                     presentFilePicker()
                 },
-                openContainingDirectory: { directory in
+                openContainingDirectory: { id in
                     isShowingDocumentSwitcher = false
                     DispatchQueue.main.async {
-                        presentFilePicker(startingIn: directory)
+                        presentContainingDirectory(for: id)
                     }
                 },
                 close: close
@@ -769,6 +769,16 @@ struct ContentView: View {
     private func presentFilePicker(startingIn directory: URL? = nil) {
         filePickerDirectory = directory
         isShowingFilePicker = true
+    }
+
+    private func presentContainingDirectory(for id: OpenDocument.ID) {
+        guard let document = documents.first(where: { $0.id == id }),
+              document.loadFileIfNeeded(),
+              let directory = document.url?.deletingLastPathComponent() else {
+            errorMessage = "Downdraft couldn’t reopen this PDF’s folder."
+            return
+        }
+        presentFilePicker(startingIn: directory)
     }
 
     #if DEBUG
@@ -1662,18 +1672,6 @@ final class OpenDocument: Identifiable {
         return originalURLString
     }
 
-    /// A Files picker can usually reopen this folder even when the PDF itself
-    /// was restored lazily; the picker still decides whether access is allowed.
-    var containingDirectoryURL: URL? {
-        if let url {
-            return url.deletingLastPathComponent()
-        }
-        guard let originalURL = URL(string: originalURLString), originalURL.isFileURL else {
-            return nil
-        }
-        return originalURL.deletingLastPathComponent()
-    }
-
     init(
         url: URL?,
         bookmarkData: Data,
@@ -1865,7 +1863,7 @@ private struct DocumentSwitcherView: View {
     let selectedID: OpenDocument.ID?
     let select: (OpenDocument.ID) -> Void
     let openPDF: () -> Void
-    let openContainingDirectory: (URL) -> Void
+    let openContainingDirectory: (OpenDocument.ID) -> Void
     let close: (OpenDocument.ID) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -1927,19 +1925,17 @@ private struct DocumentSwitcherView: View {
                         }
                         .buttonStyle(.plain)
 
-                        if let directory = document.containingDirectoryURL {
-                            Button {
-                                openContainingDirectory(directory)
-                            } label: {
-                                Image(systemName: "folder")
-                                    .font(.title3)
-                                    .foregroundStyle(.white)
-                                    .frame(width: 32, height: 32)
-                            }
-                            .buttonStyle(.borderless)
-                            .tint(.white)
-                            .accessibilityLabel("Open folder containing \(document.displayName)")
+                        Button {
+                            openContainingDirectory(document.id)
+                        } label: {
+                            Image(systemName: "folder")
+                                .font(.title3)
+                                .foregroundStyle(.white)
+                                .frame(width: 32, height: 32)
                         }
+                        .buttonStyle(.borderless)
+                        .tint(.white)
+                        .accessibilityLabel("Open folder containing \(document.displayName)")
 
                         Button {
                             close(document.id)
