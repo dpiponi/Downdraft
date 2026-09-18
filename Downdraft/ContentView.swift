@@ -845,13 +845,20 @@ struct ContentView: View {
 
     private func selectDocument(_ id: OpenDocument.ID) {
         guard let document = documents.first(where: { $0.id == id }) else { return }
-        guard document.loadFileIfNeeded() else {
-            errorMessage = "The PDF is no longer available in Files."
-            return
+        selectedDocumentID = id
+        document.loadFileIfNeeded { didLoad in
+            guard selectedDocumentID == id else { return }
+            guard didLoad else {
+                errorMessage = "The PDF is no longer available in Files."
+                return
+            }
+            finishSelecting(document)
         }
+    }
+
+    private func finishSelecting(_ document: OpenDocument) {
         restoreSharedReadingState(for: document)
         document.lastSelectedAt = Date()
-        selectedDocumentID = id
         treatsFirstPageAsCover = document.displaysAsBook
         readsHorizontally = document.readsHorizontally
         scrubbedPageIndex = document.lastPageIndex
@@ -1624,7 +1631,7 @@ private struct PDFMetadataView: View {
     }
 }
 
-final class OpenDocument: Identifiable {
+final class OpenDocument: Identifiable, @unchecked Sendable {
     let id = UUID()
     private(set) var url: URL?
     private(set) var pdfDocument: PDFDocument?
@@ -1758,6 +1765,65 @@ final class OpenDocument: Identifiable {
         pdfDocument = PDFDocument(url: resolvedURL)
         establishReadingStateIdentity()
         return pdfDocument != nil
+    }
+
+    /// Restoring a security-scoped, cloud-backed PDF can wait on its file
+    /// provider for many seconds. Keep that wait off the reader's main thread
+    /// so launch can show progress and remain interruptible.
+    @MainActor
+    func loadFileIfNeeded(completion: @escaping @MainActor @Sendable (Bool) -> Void) {
+        if pdfDocument != nil {
+            completion(true)
+            return
+        }
+
+        let existingURL = url
+        let bookmarkData = bookmarkData
+        let alreadyAccessingFile = isAccessingFile
+        let existingIdentity = readingStateIdentity
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            var resolvedURL = existingURL
+            var startedAccessingFile = false
+
+            if resolvedURL == nil {
+                var isStale = false
+                resolvedURL = try? URL(
+                    resolvingBookmarkData: bookmarkData,
+                    options: [],
+                    relativeTo: nil,
+                    bookmarkDataIsStale: &isStale
+                )
+            }
+
+            guard let resolvedURL else {
+                DispatchQueue.main.async { completion(false) }
+                return
+            }
+
+            if !alreadyAccessingFile {
+                startedAccessingFile = resolvedURL.startAccessingSecurityScopedResource()
+            }
+            let loadedDocument = PDFDocument(url: resolvedURL)
+            let identity = existingIdentity ?? loadedDocument.flatMap {
+                ReadingStateStore.identity(for: resolvedURL, document: $0)
+            }
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let loadedDocument else {
+                    if startedAccessingFile {
+                        resolvedURL.stopAccessingSecurityScopedResource()
+                    }
+                    completion(false)
+                    return
+                }
+                self.url = resolvedURL
+                self.isAccessingFile = alreadyAccessingFile || startedAccessingFile
+                self.pdfDocument = loadedDocument
+                self.readingStateIdentity = identity
+                completion(true)
+            }
+        }
     }
 
     private func establishReadingStateIdentity() {
