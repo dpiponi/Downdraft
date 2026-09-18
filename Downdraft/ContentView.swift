@@ -44,6 +44,21 @@ struct ContentView: View {
         documents.first { $0.id == selectedDocumentID }
     }
 
+    private var loadingReaderState: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .controlSize(.large)
+            Text("Opening PDF…")
+                .font(.callout)
+            Button("Open Another PDF") {
+                isShowingFilePicker = true
+            }
+            .buttonStyle(.bordered)
+        }
+        .foregroundStyle(.white)
+        .tint(.white)
+    }
+
     private var currentSearchSelection: PDFSelection? {
         guard searchResults.indices.contains(currentSearchResultIndex) else { return nil }
         return searchResults[currentSearchResultIndex]
@@ -105,8 +120,8 @@ struct ContentView: View {
                                     reader(for: document)
                                 }
 
-                                if selectedDocument?.url == nil {
-                                    ProgressView()
+                                if selectedDocument?.pdfDocument == nil {
+                                    loadingReaderState
                                 }
 
                                 if !isReaderFocused, let document = selectedDocument,
