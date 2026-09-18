@@ -37,6 +37,7 @@ struct ContentView: View {
     @State private var scrubberRevision = 0
     @State private var deviceOrientation = UIDevice.current.orientation
     @State private var isSearchPresented = false
+    @State private var loadingMessage = "Opening PDF…"
     @FocusState private var isSearchFieldFocused: Bool
     @State private var bookmarkPreview: BookmarkPreview?
 
@@ -48,7 +49,7 @@ struct ContentView: View {
         VStack(spacing: 16) {
             ProgressView()
                 .controlSize(.large)
-            Text("Opening PDF…")
+            Text(loadingMessage)
                 .font(.callout)
             Button("Open Another PDF") {
                 isShowingFilePicker = true
@@ -861,7 +862,10 @@ struct ContentView: View {
     private func selectDocument(_ id: OpenDocument.ID) {
         guard let document = documents.first(where: { $0.id == id }) else { return }
         selectedDocumentID = id
-        document.loadFileIfNeeded { didLoad in
+        loadingMessage = "Opening PDF…"
+        document.loadFileIfNeeded(progress: { message in
+            loadingMessage = message
+        }) { didLoad in
             guard selectedDocumentID == id else { return }
             guard didLoad else {
                 errorMessage = "The PDF is no longer available in Files."
@@ -1786,7 +1790,10 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
     /// provider for many seconds. Keep that wait off the reader's main thread
     /// so launch can show progress and remain interruptible.
     @MainActor
-    func loadFileIfNeeded(completion: @escaping @MainActor @Sendable (Bool) -> Void) {
+    func loadFileIfNeeded(
+        progress: @escaping @MainActor @Sendable (String) -> Void,
+        completion: @escaping @MainActor @Sendable (Bool) -> Void
+    ) {
         if pdfDocument != nil {
             completion(true)
             return
@@ -1798,6 +1805,9 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
         let existingIdentity = readingStateIdentity
 
         DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.main.async {
+                progress(existingURL == nil ? "Restoring PDF access…" : "Opening PDF…")
+            }
             var resolvedURL = existingURL
             var startedAccessingFile = false
 
@@ -1819,7 +1829,13 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
             if !alreadyAccessingFile {
                 startedAccessingFile = resolvedURL.startAccessingSecurityScopedResource()
             }
+            DispatchQueue.main.async {
+                progress("Opening PDF…")
+            }
             let loadedDocument = PDFDocument(url: resolvedURL)
+            DispatchQueue.main.async {
+                progress("Preparing reading state…")
+            }
             let identity = existingIdentity ?? loadedDocument.flatMap {
                 ReadingStateStore.identity(for: resolvedURL, document: $0)
             }
