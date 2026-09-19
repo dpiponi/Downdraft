@@ -171,7 +171,7 @@ enum ReadingStateStore {
     static func merged(_ lhs: State, _ rhs: State) -> State {
         State(
             page: newer(lhs.page, rhs.page),
-            bookmarks: mergedBookmarks(lhs.bookmarks, rhs.bookmarks)
+            bookmarks: deduplicatedBookmarks(mergedBookmarks(lhs.bookmarks, rhs.bookmarks))
         )
     }
 
@@ -198,6 +198,31 @@ enum ReadingStateStore {
             case let (nil, right?): return right
             case (nil, nil): return .init(pageIndex: nil, modifiedAt: .distantPast, deviceID: "")
             }
+        }
+    }
+
+    /// Slots are synced independently, so two devices can legitimately write
+    /// the same page to different slots before their states meet.  The reader
+    /// treats a page as a single bookmark; preserve its newest slot and clear
+    /// any older duplicates when merging.
+    private static func deduplicatedBookmarks(_ bookmarks: [State.Bookmark]) -> [State.Bookmark] {
+        let newestSlotByPage = bookmarks.enumerated().reduce(into: [Int: Int]()) { slots, entry in
+            guard let pageIndex = entry.element.pageIndex else { return }
+            guard let existingIndex = slots[pageIndex] else {
+                slots[pageIndex] = entry.offset
+                return
+            }
+            if newer(bookmarks[existingIndex], entry.element) == entry.element {
+                slots[pageIndex] = entry.offset
+            }
+        }
+
+        return bookmarks.enumerated().map { index, bookmark in
+            guard let pageIndex = bookmark.pageIndex,
+                  newestSlotByPage[pageIndex] != index else {
+                return bookmark
+            }
+            return .init(pageIndex: nil, modifiedAt: bookmark.modifiedAt, deviceID: bookmark.deviceID)
         }
     }
 

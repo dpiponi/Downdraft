@@ -50,6 +50,24 @@ final class ReadingStateStoreTests: XCTestCase {
         XCTAssertEqual(ReadingStateStore.merged(left, right).page.index, 7)
     }
 
+    func testMergeKeepsOnlyTheNewestBookmarkForTheSamePage() {
+        let older = Date(timeIntervalSinceReferenceDate: 10)
+        let newer = Date(timeIntervalSinceReferenceDate: 20)
+        let left = ReadingStateStore.State(
+            page: .init(index: 0, modifiedAt: older, deviceID: "ipad"),
+            bookmarks: [.init(pageIndex: 12, modifiedAt: newer, deviceID: "ipad")]
+        )
+        let right = ReadingStateStore.State(
+            page: .init(index: 0, modifiedAt: newer, deviceID: "phone"),
+            bookmarks: [
+                .init(pageIndex: 4, modifiedAt: older, deviceID: "phone"),
+                .init(pageIndex: 12, modifiedAt: newer, deviceID: "phone")
+            ]
+        )
+
+        XCTAssertEqual(ReadingStateStore.merged(left, right).bookmarks.map(\.pageIndex), [nil, 12])
+    }
+
     func testSavedPageFallbackBeatsAnOlderCloudPage() {
         let older = Date(timeIntervalSinceReferenceDate: 10)
         let saved = Date(timeIntervalSinceReferenceDate: 20)

@@ -1140,7 +1140,7 @@ struct ContentView: View {
         )
         document.lastPageIndex = state.page.index
         document.lastPageModifiedAt = state.page.modifiedAt
-        document.bookmarkPageIndices = state.bookmarks.map(\.pageIndex)
+        document.bookmarkPageIndices = OpenDocument.deduplicatedBookmarks(state.bookmarks.map(\.pageIndex))
     }
 
     private func refreshSharedReadingState() {
@@ -1155,7 +1155,7 @@ struct ContentView: View {
         )
         document.lastPageIndex = state.page.index
         document.lastPageModifiedAt = state.page.modifiedAt
-        document.bookmarkPageIndices = state.bookmarks.map(\.pageIndex)
+        document.bookmarkPageIndices = OpenDocument.deduplicatedBookmarks(state.bookmarks.map(\.pageIndex))
         bookmarkPageIndices = document.bookmarkPageIndices
         if state.page.index != previousPage {
             scrubbedPageIndex = state.page.index
@@ -1737,7 +1737,7 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
         self.lastPageIndex = lastPageIndex
         self.displaysAsBook = displaysAsBook
         self.readsHorizontally = readsHorizontally
-        self.bookmarkPageIndices = bookmarkPageIndices
+        self.bookmarkPageIndices = Self.deduplicatedBookmarks(bookmarkPageIndices)
         self.lastSelectedAt = lastSelectedAt
         self.lastPageModifiedAt = lastPageModifiedAt
         self.isAccessingFile = isAccessingFile
@@ -1775,6 +1775,14 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
     func matches(_ otherURL: URL) -> Bool {
         originalURLString == otherURL.standardizedFileURL.absoluteString
             || url?.standardizedFileURL == otherURL.standardizedFileURL
+    }
+
+    static func deduplicatedBookmarks(_ bookmarks: [Int?]) -> [Int?] {
+        var seenPages = Set<Int>()
+        return bookmarks.map { pageIndex in
+            guard let pageIndex, seenPages.insert(pageIndex).inserted else { return nil }
+            return pageIndex
+        }
     }
 
     func loadFileIfNeeded() -> Bool {
