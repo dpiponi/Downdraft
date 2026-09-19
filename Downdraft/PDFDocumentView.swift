@@ -15,6 +15,7 @@ struct PDFDocumentView: UIViewRepresentable {
     var requestedPageRequestID: UUID?
     var onPageChanged: (Int) -> Void = { _ in }
     var onPDFKitCurrentPageChanged: (Int) -> Void = { _ in }
+    var onTextSelectionChanged: (String?) -> Void = { _ in }
     var onJumpToFirstPage: (Int, Int) -> Void = { _, _ in }
     var onCenterTap: () -> Void = { }
     var onLinkNavigation: (Int, Int) -> Void = { _, _ in }
@@ -25,6 +26,7 @@ struct PDFDocumentView: UIViewRepresentable {
         view.displayDirection = .vertical
         view.displayMode = .singlePageContinuous
         context.coordinator.startObservingPageChanges(in: view)
+        context.coordinator.startObservingSelectionChanges(in: view)
         context.coordinator.startObservingReaderTaps(in: view)
         context.coordinator.startObservingSearchHighlightDismissal(in: view)
         return view
@@ -33,6 +35,7 @@ struct PDFDocumentView: UIViewRepresentable {
     func updateUIView(_ pdfView: PDFView, context: Context) {
         context.coordinator.onPageChanged = onPageChanged
         context.coordinator.onPDFKitCurrentPageChanged = onPDFKitCurrentPageChanged
+        context.coordinator.onTextSelectionChanged = onTextSelectionChanged
         context.coordinator.onJumpToFirstPage = onJumpToFirstPage
         context.coordinator.onCenterTap = onCenterTap
         context.coordinator.onLinkNavigation = onLinkNavigation
@@ -71,6 +74,7 @@ struct PDFDocumentView: UIViewRepresentable {
         var loadedDocument: PDFDocument?
         var onPageChanged: (Int) -> Void = { _ in }
         var onPDFKitCurrentPageChanged: (Int) -> Void = { _ in }
+        var onTextSelectionChanged: (String?) -> Void = { _ in }
         var onJumpToFirstPage: (Int, Int) -> Void = { _, _ in }
         var onCenterTap: () -> Void = { }
         var onLinkNavigation: (Int, Int) -> Void = { _, _ in }
@@ -147,6 +151,21 @@ struct PDFDocumentView: UIViewRepresentable {
                 name: .PDFViewPageChanged,
                 object: pdfView
             )
+        }
+
+        func startObservingSelectionChanges(in pdfView: PDFView) {
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(selectionChanged),
+                name: .PDFViewSelectionChanged,
+                object: pdfView
+            )
+        }
+
+        @objc private func selectionChanged(_ notification: Notification) {
+            guard let pdfView = notification.object as? PDFView else { return }
+            let text = pdfView.currentSelection?.string?.trimmingCharacters(in: .whitespacesAndNewlines)
+            onTextSelectionChanged(text?.isEmpty == false ? text : nil)
         }
 
         func startObservingReaderTaps(in pdfView: PDFView) {

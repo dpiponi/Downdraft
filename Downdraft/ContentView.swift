@@ -37,6 +37,7 @@ struct ContentView: View {
     @State private var scrubberRevision = 0
     @State private var deviceOrientation = UIDevice.current.orientation
     @State private var isSearchPresented = false
+    @State private var selectedPDFText: String?
     @State private var loadingMessage = "Opening PDF…"
     @FocusState private var isSearchFieldFocused: Bool
     @State private var bookmarkPreview: BookmarkPreview?
@@ -274,6 +275,10 @@ struct ContentView: View {
                 onPDFKitCurrentPageChanged: { pageIndex in
                     guard document.id == selectedDocumentID else { return }
                     pdfKitCurrentPageIndex = pageIndex
+                },
+                onTextSelectionChanged: { text in
+                    guard document.id == selectedDocumentID else { return }
+                    selectedPDFText = text
                 },
                 onJumpToFirstPage: { sourcePageIndex, destinationPageIndex in
                     recordNavigation(
@@ -532,15 +537,7 @@ struct ContentView: View {
                 }
                 .accessibilityLabel("Open PDF")
                 Button {
-                    if isSearchPresented {
-                        isSearchFieldFocused = false
-                        isSearchPresented = false
-                    } else {
-                        isSearchPresented = true
-                        DispatchQueue.main.async {
-                            isSearchFieldFocused = true
-                        }
-                    }
+                    presentSearch()
                 } label: {
                     Image(systemName: "magnifyingglass")
                         .frame(width: 44, height: 44)
@@ -909,6 +906,29 @@ struct ContentView: View {
         searchResults = document.findString(query, withOptions: [.caseInsensitive])
         currentSearchResultIndex = 0
         recordNavigation(to: searchResults.first)
+    }
+
+    private func presentSearch() {
+        let selectedText = selectedPDFText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let selectedText, !selectedText.isEmpty {
+            searchText = selectedText
+            isSearchPresented = true
+            performSearch()
+            DispatchQueue.main.async {
+                isSearchFieldFocused = true
+            }
+            return
+        }
+
+        if isSearchPresented {
+            isSearchFieldFocused = false
+            isSearchPresented = false
+        } else {
+            isSearchPresented = true
+            DispatchQueue.main.async {
+                isSearchFieldFocused = true
+            }
+        }
     }
 
     private func moveSearchResult(by offset: Int) {
