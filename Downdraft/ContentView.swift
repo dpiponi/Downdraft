@@ -665,7 +665,7 @@ struct ContentView: View {
     private var searchControls: some View {
         HStack(spacing: 8) {
             Button {
-                isSearchFieldFocused = true
+                focusSearchControl()
             } label: {
                 Image(systemName: "magnifyingglass")
                     .font(.title3.weight(.medium))
@@ -890,6 +890,7 @@ struct ContentView: View {
         requestedPageIndex = nil
         requestedPageRequestID = nil
         bookmarkPageIndices = document.bookmarkPageIndices
+        selectedPDFText = nil
         recordRecentDocument(document, rendersThumbnail: false)
         scheduleRecentThumbnail(for: document.id)
         outlineDestination = nil
@@ -909,14 +910,7 @@ struct ContentView: View {
     }
 
     private func presentSearch() {
-        let selectedText = selectedPDFText?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let selectedText, !selectedText.isEmpty {
-            searchText = selectedText
-            isSearchPresented = true
-            performSearch()
-            DispatchQueue.main.async {
-                isSearchFieldFocused = true
-            }
+        if searchSelectedTextIfAvailable() {
             return
         }
 
@@ -929,6 +923,27 @@ struct ContentView: View {
                 isSearchFieldFocused = true
             }
         }
+    }
+
+    private func focusSearchControl() {
+        if searchSelectedTextIfAvailable() {
+            return
+        }
+        isSearchFieldFocused = true
+    }
+
+    private func searchSelectedTextIfAvailable() -> Bool {
+        let selectedText = selectedPDFText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let selectedText, !selectedText.isEmpty {
+            searchText = selectedText
+            isSearchPresented = true
+            performSearch()
+            DispatchQueue.main.async {
+                isSearchFieldFocused = true
+            }
+            return true
+        }
+        return false
     }
 
     private func moveSearchResult(by offset: Int) {
