@@ -802,6 +802,7 @@ struct ContentView: View {
             bookmarkData: Data(),
             displayName: "Downdraft UI Fixture",
             originalURLString: url.absoluteString,
+            isTransient: true,
             isAccessingFile: false
         )
         documents = [document]
@@ -1677,6 +1678,9 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
     var bookmarkPageIndices: [Int?]
     var lastSelectedAt: Date
     var lastPageModifiedAt: Date
+    /// Test-only documents are temporary files and must never become part of
+    /// the normal restore list.
+    let isTransient: Bool
     private var isAccessingFile: Bool
     private var navigationHistory: [Int]
     private var navigationHistoryIndex: Int
@@ -1727,6 +1731,7 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
         bookmarkPageIndices: [Int?] = [],
         lastSelectedAt: Date = .distantPast,
         lastPageModifiedAt: Date = .distantPast,
+        isTransient: Bool = false,
         isAccessingFile: Bool
     ) {
         self.url = url
@@ -1740,6 +1745,7 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
         self.bookmarkPageIndices = Self.deduplicatedBookmarks(bookmarkPageIndices)
         self.lastSelectedAt = lastSelectedAt
         self.lastPageModifiedAt = lastPageModifiedAt
+        self.isTransient = isTransient
         self.isAccessingFile = isAccessingFile
         self.navigationHistory = [lastPageIndex]
         self.navigationHistoryIndex = 0
@@ -1932,7 +1938,8 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
     private static let selectedDocumentKey = "selectedDocumentIdentity"
 
     static func save(_ documents: [OpenDocument], selectedDocumentID: OpenDocument.ID?) {
-        let savedDocuments = documents.map {
+        let persistentDocuments = documents.filter { !$0.isTransient }
+        let savedDocuments = persistentDocuments.map {
             SavedDocument(
                 bookmarkData: $0.bookmarkData,
                 displayName: $0.displayName,
@@ -1948,7 +1955,7 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
         }
         guard let data = try? JSONEncoder().encode(savedDocuments) else { return }
         UserDefaults.standard.set(data, forKey: savedDocumentsKey)
-        if let selectedDocument = documents.first(where: { $0.id == selectedDocumentID }) {
+        if let selectedDocument = persistentDocuments.first(where: { $0.id == selectedDocumentID }) {
             UserDefaults.standard.set(selectedDocument.persistentIdentity, forKey: selectedDocumentKey)
         } else {
             UserDefaults.standard.removeObject(forKey: selectedDocumentKey)
@@ -1966,7 +1973,21 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
             return []
         }
 
-        return savedDocuments.map { savedDocument in
+        let restorableDocuments = savedDocuments.filter { !isLegacyUITestFixture($0) }
+        if restorableDocuments.count != savedDocuments.count {
+            if let data = try? JSONEncoder().encode(restorableDocuments) {
+                UserDefaults.standard.set(data, forKey: savedDocumentsKey)
+            }
+            let removedIdentities = Set(savedDocuments
+                .filter(isLegacyUITestFixture)
+                .map { $0.originalURLString ?? "" })
+            if let selectedIdentity = UserDefaults.standard.string(forKey: selectedDocumentKey),
+               removedIdentities.contains(selectedIdentity) {
+                UserDefaults.standard.removeObject(forKey: selectedDocumentKey)
+            }
+        }
+
+        return restorableDocuments.map { savedDocument in
             OpenDocument(
                 url: nil,
                 bookmarkData: savedDocument.bookmarkData,
@@ -1982,6 +2003,10 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
                 isAccessingFile: false
             )
         }
+    }
+
+    private static func isLegacyUITestFixture(_ document: SavedDocument) -> Bool {
+        document.displayName == "Downdraft UI Fixture" && document.bookmarkData.isEmpty
     }
 }
 
