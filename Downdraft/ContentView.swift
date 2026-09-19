@@ -46,18 +46,25 @@ struct ContentView: View {
     }
 
     private var loadingReaderState: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .controlSize(.large)
-            Text(loadingMessage)
-                .font(.callout)
-            Button("Open Another PDF") {
-                isShowingFilePicker = true
+        ZStack {
+            Color.black.opacity(0.72)
+
+            VStack(spacing: 16) {
+                ProgressView()
+                    .controlSize(.large)
+                Text(loadingMessage)
+                    .font(.callout)
+                Button("Open Another PDF") {
+                    isShowingFilePicker = true
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+                .foregroundStyle(.white)
             }
-            .buttonStyle(.bordered)
+            .padding(28)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
-        .foregroundStyle(.white)
-        .tint(.white)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var currentSearchSelection: PDFSelection? {
