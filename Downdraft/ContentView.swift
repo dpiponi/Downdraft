@@ -1384,10 +1384,6 @@ private struct ChapterMarkers: View {
             }
 
             ZStack(alignment: .leading) {
-                glassTrack
-                    .frame(height: 18)
-                    .padding(.horizontal, thumbRadius)
-
                 Capsule()
                     .fill(.white.opacity(0.78))
                     .frame(width: max(0, xPosition(currentPosition) - thumbRadius), height: 6)
@@ -1401,6 +1397,12 @@ private struct ChapterMarkers: View {
                         .frame(width: 1, height: 12)
                         .position(x: xPosition(position), y: geometry.size.height / 2)
                 }
+
+                // This is a lens over the track, not its background: the
+                // progress and chapter marks remain visibly within the glass.
+                glassTrack
+                    .frame(height: 18)
+                    .padding(.horizontal, thumbRadius)
             }
         }
     }
