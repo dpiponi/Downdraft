@@ -1358,7 +1358,7 @@ private struct CircularPageSlider: UIViewRepresentable {
     }
 
     private static let circularThumb: UIImage = {
-        let diameter: CGFloat = 14
+        let diameter: CGFloat = 20
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: diameter, height: diameter))
         return renderer.image { _ in
             let bounds = CGRect(origin: .zero, size: CGSize(width: diameter, height: diameter))
@@ -1377,7 +1377,7 @@ private struct ChapterMarkers: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let thumbRadius: CGFloat = 7
+            let thumbRadius: CGFloat = 10
             let trackWidth = max(0, geometry.size.width - thumbRadius * 2)
             let xPosition = { (position: Double) in
                 thumbRadius + CGFloat(position) * trackWidth
@@ -1385,12 +1385,12 @@ private struct ChapterMarkers: View {
 
             ZStack(alignment: .leading) {
                 glassTrack
-                    .frame(height: 10)
+                    .frame(height: 18)
                     .padding(.horizontal, thumbRadius)
 
                 Capsule()
                     .fill(.white.opacity(0.78))
-                    .frame(width: max(0, xPosition(currentPosition) - thumbRadius), height: 4)
+                    .frame(width: max(0, xPosition(currentPosition) - thumbRadius), height: 6)
                     .offset(x: thumbRadius)
 
                 ForEach(Array(positions.enumerated()), id: \.offset) { _, position in
@@ -1398,7 +1398,7 @@ private struct ChapterMarkers: View {
                         // On the filled side of the track, a dark tick remains
                         // visible without competing with the progress itself.
                         .fill(position <= currentPosition ? .black.opacity(0.58) : .white.opacity(0.7))
-                        .frame(width: 1, height: 8)
+                        .frame(width: 1, height: 12)
                         .position(x: xPosition(position), y: geometry.size.height / 2)
                 }
             }
