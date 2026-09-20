@@ -1375,15 +1375,30 @@ private struct ChapterMarkers: View {
     var body: some View {
         GeometryReader { geometry in
             ForEach(Array(positions.enumerated()), id: \.offset) { _, position in
-                Rectangle()
-                    // On the filled side of the track, a dark tick remains
-                    // visible without competing with the progress itself.
-                    .fill(position <= currentPosition ? .black.opacity(0.58) : .white.opacity(0.62))
-                    .frame(width: 1, height: 6)
-                    .position(
-                        x: min(max(CGFloat(position) * geometry.size.width, 1), geometry.size.width - 1),
-                        y: geometry.size.height / 2
-                    )
+                let tickX = min(
+                    max(CGFloat(position) * geometry.size.width, 1),
+                    geometry.size.width - 1
+                )
+                let isUnderHandle = abs(position - currentPosition) < 0.000_001
+
+                Group {
+                    Rectangle()
+                        // On the filled side of the track, a dark tick remains
+                        // visible without competing with the progress itself.
+                        .fill(position <= currentPosition ? .black.opacity(0.58) : .white.opacity(0.62))
+                        .frame(width: 1, height: 6)
+                        .position(x: tickX, y: geometry.size.height / 2)
+
+                    // The circular thumb covers an exact chapter position.
+                    // Repeat that tick just to its left, where it remains a
+                    // small, dark indication of the chapter boundary.
+                    if isUnderHandle {
+                        Rectangle()
+                            .fill(.black.opacity(0.68))
+                            .frame(width: 1, height: 8)
+                            .position(x: max(1, tickX - 9), y: geometry.size.height / 2)
+                    }
+                }
             }
         }
     }
