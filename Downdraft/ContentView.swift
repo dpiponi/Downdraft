@@ -1279,7 +1279,10 @@ private struct PageScrubber: View {
                 }
             )
             .overlay {
-                ChapterMarkers(positions: chapterPositions)
+                ChapterMarkers(
+                    positions: chapterPositions,
+                    currentPosition: Double(pendingPageIndex ?? pageIndex) / Double(max(pageCount - 1, 1))
+                )
                     .allowsHitTesting(false)
             }
         }
@@ -1367,12 +1370,15 @@ private struct CircularPageSlider: UIViewRepresentable {
 /// to have the unsurprising, standard slider behaviour.
 private struct ChapterMarkers: View {
     let positions: [Double]
+    let currentPosition: Double
 
     var body: some View {
         GeometryReader { geometry in
             ForEach(Array(positions.enumerated()), id: \.offset) { _, position in
                 Rectangle()
-                    .fill(.white.opacity(0.62))
+                    // On the filled side of the track, a dark tick remains
+                    // visible without competing with the progress itself.
+                    .fill(position <= currentPosition ? .black.opacity(0.58) : .white.opacity(0.62))
                     .frame(width: 1, height: 6)
                     .position(
                         x: min(max(CGFloat(position) * geometry.size.width, 1), geometry.size.width - 1),
