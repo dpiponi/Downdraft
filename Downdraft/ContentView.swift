@@ -1391,12 +1391,28 @@ private final class ChapterMarkedSlider: UISlider {
     }
 
     func refreshChapterMarkers() {
-        tickOverlay.positions = chapterPositions
-        tickOverlay.trackRect = trackRect(forBounds: bounds)
+        let track = trackRect(forBounds: bounds)
         let range = maximumValue - minimumValue
-        tickOverlay.currentPosition = range > 0
+        let currentPosition = range > 0
             ? CGFloat((value - minimumValue) / range)
             : 0
+        let thumbCenter = thumbRect(forBounds: bounds, trackRect: track, value: value).midX
+
+        // A UISlider's thumb does not travel across the full track rectangle:
+        // it stops half a thumb-width from either end. Ask UIKit for each
+        // prospective thumb centre so the chapter marks exactly agree with
+        // the position the slider itself uses.
+        tickOverlay.ticks = chapterPositions.map { position in
+            let chapterValue = minimumValue + Float(position) * range
+            let chapterCenter = thumbRect(
+                forBounds: bounds,
+                trackRect: track,
+                value: chapterValue
+            ).midX
+            return ChapterTick(x: chapterCenter, isPast: CGFloat(position) <= currentPosition)
+        }
+        tickOverlay.thumbCenter = thumbCenter
+        tickOverlay.thumbRadius = thumbRect(forBounds: bounds, trackRect: track, value: value).width / 2
         tickOverlay.setNeedsDisplay()
     }
 
@@ -1408,31 +1424,31 @@ private final class ChapterMarkedSlider: UISlider {
 }
 
 private final class ChapterTickOverlay: UIView {
-    var positions: [Double] = []
-    var trackRect = CGRect.zero
-    var currentPosition: CGFloat = 0
+    var ticks: [ChapterTick] = []
+    var thumbCenter: CGFloat = 0
+    var thumbRadius: CGFloat = 0
 
     override func draw(_ rect: CGRect) {
-        guard trackRect.width > 0 else { return }
+        guard thumbRadius > 0 else { return }
         let context = UIGraphicsGetCurrentContext()
-        let current = min(max(currentPosition, 0), 1)
-        let thumbCenter = trackRect.minX + current * trackRect.width
-        let thumbRadius: CGFloat = 7
 
-        for position in positions {
-            let normalized = min(max(CGFloat(position), 0), 1)
-            let x = trackRect.minX + normalized * trackRect.width
+        for tick in ticks {
             // A tick under either half of the white circular handle needs the
             // same dark treatment as one on the filled track. In particular,
             // this covers marks just to the handle's right of centre.
-            let isCoveredByThumb = abs(x - thumbCenter) <= thumbRadius
-            let color = normalized <= current || isCoveredByThumb
-                ? UIColor.black.withAlphaComponent(0.62)
-                : UIColor.white.withAlphaComponent(0.68)
+            let isCoveredByThumb = abs(tick.x - thumbCenter) <= thumbRadius
+            let color = tick.isPast || isCoveredByThumb
+                ? UIColor.black.withAlphaComponent(0.78)
+                : UIColor.white.withAlphaComponent(0.82)
             context?.setFillColor(color.cgColor)
-            context?.fill(CGRect(x: x - 0.5, y: trackRect.midY - 3, width: 1, height: 6))
+            context?.fill(CGRect(x: tick.x - 1, y: bounds.midY - 4, width: 2, height: 8))
         }
     }
+}
+
+private struct ChapterTick {
+    let x: CGFloat
+    let isPast: Bool
 }
 
 @MainActor
