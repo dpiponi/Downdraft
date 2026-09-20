@@ -311,6 +311,7 @@ struct ContentView: View {
         PageScrubber(
             pageIndex: scrubbedPageIndex,
             pageCount: document.pageCount,
+            chapterPositions: topLevelChapterPositions(in: document),
             seek: requestPage,
             commit: { sourcePageIndex, destinationPageIndex in
                 guard let selectedDocument else { return }
@@ -323,6 +324,27 @@ struct ContentView: View {
         )
         .id(scrubberRevision)
         .frame(maxWidth: .infinity)
+    }
+
+    /// The PDF outline is already available for the contents sheet.  Its
+    /// top-level entries make useful, restrained landmarks on the page bar
+    /// without inspecting any additional document data.
+    private func topLevelChapterPositions(in document: PDFDocument) -> [Double] {
+        guard document.pageCount > 1, let outline = document.outlineRoot else {
+            return []
+        }
+
+        let lastPageIndex = Double(document.pageCount - 1)
+        var seen = Set<Int>()
+        return (0..<outline.numberOfChildren).compactMap { index in
+            guard let entry = outline.child(at: index),
+                  let page = entry.destination?.page else {
+                return nil
+            }
+            let pageIndex = document.index(for: page)
+            guard seen.insert(pageIndex).inserted else { return nil }
+            return Double(pageIndex) / lastPageIndex
+        }
     }
 
     /// Reader controls deliberately sit beside the PDF view, rather than in a
@@ -447,7 +469,8 @@ struct ContentView: View {
                         .padding(.top, 6)
                         .padding(.bottom, isPhone ? 14 : 10)
                 }
-                .padding(.horizontal, 12)
+                .frame(maxWidth: isPhone ? 320 : 680)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, 28)
                 .padding(.bottom, isPhone ? 36 : 42)
                 .foregroundStyle(.white)
@@ -1210,6 +1233,7 @@ struct ContentView: View {
 private struct PageScrubber: View {
     let pageIndex: Int
     let pageCount: Int
+    let chapterPositions: [Double]
     let seek: (Int) -> Void
     let commit: (Int, Int) -> Void
     @State private var pageIndexWhenScrubbingBegan: Int?
@@ -1255,6 +1279,11 @@ private struct PageScrubber: View {
                     pendingPageIndex = nil
                 }
             )
+            .controlSize(.small)
+            .overlay {
+                ChapterMarkers(positions: chapterPositions)
+                    .allowsHitTesting(false)
+            }
         }
         .padding(.horizontal)
         .padding(.vertical, 10)
@@ -1264,6 +1293,27 @@ private struct PageScrubber: View {
             // ordinary scrolling as well as direct scrubber moves.
             if pageIndexWhenScrubbingBegan == nil {
                 pendingPageIndex = nil
+            }
+        }
+    }
+}
+
+/// Fine vertical ticks indicate the starts of top-level outline entries.
+/// They deliberately do not act as controls: dragging or tapping continues
+/// to have the unsurprising, standard slider behaviour.
+private struct ChapterMarkers: View {
+    let positions: [Double]
+
+    var body: some View {
+        GeometryReader { geometry in
+            ForEach(Array(positions.enumerated()), id: \.offset) { _, position in
+                Rectangle()
+                    .fill(.white.opacity(0.62))
+                    .frame(width: 1, height: 6)
+                    .position(
+                        x: min(max(CGFloat(position) * geometry.size.width, 1), geometry.size.width - 1),
+                        y: geometry.size.height / 2
+                    )
             }
         }
     }
