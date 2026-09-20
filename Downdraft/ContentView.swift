@@ -1413,6 +1413,8 @@ private final class ChapterMarkedSlider: UISlider {
         }
         tickOverlay.thumbCenter = thumbCenter
         tickOverlay.thumbRadius = thumbRect(forBounds: bounds, trackRect: track, value: value).width / 2
+        tickOverlay.trackCenterY = track.midY
+        tickOverlay.trackHeight = track.height
         tickOverlay.setNeedsDisplay()
     }
 
@@ -1427,9 +1429,11 @@ private final class ChapterTickOverlay: UIView {
     var ticks: [ChapterTick] = []
     var thumbCenter: CGFloat = 0
     var thumbRadius: CGFloat = 0
+    var trackCenterY: CGFloat = 0
+    var trackHeight: CGFloat = 0
 
     override func draw(_ rect: CGRect) {
-        guard thumbRadius > 0 else { return }
+        guard thumbRadius > 0, trackHeight > 0 else { return }
         let context = UIGraphicsGetCurrentContext()
 
         for tick in ticks {
@@ -1441,7 +1445,12 @@ private final class ChapterTickOverlay: UIView {
                 ? UIColor(white: 0.38, alpha: 0.9)
                 : UIColor.white.withAlphaComponent(0.82)
             context?.setFillColor(color.cgColor)
-            context?.fill(CGRect(x: tick.x - 1, y: bounds.midY - 4, width: 2, height: 8))
+            context?.fill(CGRect(
+                x: tick.x - 1,
+                y: trackCenterY - trackHeight / 2,
+                width: 2,
+                height: trackHeight
+            ))
         }
     }
 }
