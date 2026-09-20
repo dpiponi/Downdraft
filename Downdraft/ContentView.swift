@@ -1262,6 +1262,7 @@ private struct PageScrubber: View {
                     }
                 ),
                 range: 0...Double(max(pageCount - 1, 0)),
+                chapterPositions: chapterPositions,
                 onEditingChanged: { isEditing in
                     if isEditing {
                         if pageIndexWhenScrubbingBegan == nil {
@@ -1278,13 +1279,6 @@ private struct PageScrubber: View {
                     pendingPageIndex = nil
                 }
             )
-            .overlay {
-                ChapterMarkers(
-                    positions: chapterPositions,
-                    currentPosition: Double(pendingPageIndex ?? pageIndex) / Double(max(pageCount - 1, 1))
-                )
-                    .allowsHitTesting(false)
-            }
         }
         .padding(.horizontal)
         .padding(.vertical, 10)
@@ -1304,14 +1298,15 @@ private struct PageScrubber: View {
 private struct CircularPageSlider: UIViewRepresentable {
     @Binding var value: Double
     let range: ClosedRange<Double>
+    let chapterPositions: [Double]
     let onEditingChanged: (Bool) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
 
-    func makeUIView(context: Context) -> UISlider {
-        let slider = UISlider()
+    func makeUIView(context: Context) -> ChapterMarkedSlider {
+        let slider = ChapterMarkedSlider()
         slider.isContinuous = true
         slider.minimumTrackTintColor = .white
         slider.maximumTrackTintColor = UIColor.white.withAlphaComponent(0.32)
@@ -1323,15 +1318,17 @@ private struct CircularPageSlider: UIViewRepresentable {
         return slider
     }
 
-    func updateUIView(_ slider: UISlider, context: Context) {
+    func updateUIView(_ slider: ChapterMarkedSlider, context: Context) {
         context.coordinator.parent = self
         slider.minimumValue = Float(range.lowerBound)
         slider.maximumValue = Float(range.upperBound)
+        slider.chapterPositions = chapterPositions
         // A page can change because of a link, contents entry, history action,
         // or normal reading. Never fight a finger which is currently dragging.
         if !slider.isTracking {
             slider.value = Float(value)
         }
+        slider.refreshChapterMarkers()
     }
 
     final class Coordinator: NSObject {
@@ -1347,6 +1344,7 @@ private struct CircularPageSlider: UIViewRepresentable {
 
         @MainActor @objc func valueChanged(_ slider: UISlider) {
             parent.value = Double(slider.value.rounded())
+            (slider as? ChapterMarkedSlider)?.refreshChapterMarkers()
         }
 
         @MainActor @objc func finishedEditing() {
@@ -1365,41 +1363,68 @@ private struct CircularPageSlider: UIViewRepresentable {
     }()
 }
 
-/// Fine vertical ticks indicate the starts of top-level outline entries.
-/// They deliberately do not act as controls: dragging or tapping continues
-/// to have the unsurprising, standard slider behaviour.
-private struct ChapterMarkers: View {
-    let positions: [Double]
-    let currentPosition: Double
+/// A non-interactive child view renders after UIKit's own slider parts. This
+/// makes chapter ticks unambiguously sit above both halves of the track and,
+/// where necessary, the circular handle.
+private final class ChapterMarkedSlider: UISlider {
+    var chapterPositions: [Double] = [] {
+        didSet { refreshChapterMarkers() }
+    }
 
-    var body: some View {
-        GeometryReader { geometry in
-            ForEach(Array(positions.enumerated()), id: \.offset) { _, position in
-                let tickX = min(
-                    max(CGFloat(position) * geometry.size.width, 1),
-                    geometry.size.width - 1
-                )
-                let isUnderHandle = abs(position - currentPosition) < 0.000_001
+    private let tickOverlay = ChapterTickOverlay()
 
-                Group {
-                    Rectangle()
-                        // On the filled side of the track, a dark tick remains
-                        // visible without competing with the progress itself.
-                        .fill(position <= currentPosition ? .black.opacity(0.58) : .white.opacity(0.62))
-                        .frame(width: 1, height: 6)
-                        .position(x: tickX, y: geometry.size.height / 2)
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        configureTickOverlay()
+    }
 
-                    // The circular thumb covers an exact chapter position.
-                    // Repeat that tick just to its left, where it remains a
-                    // small, dark indication of the chapter boundary.
-                    if isUnderHandle {
-                        Rectangle()
-                            .fill(.black.opacity(0.68))
-                            .frame(width: 1, height: 8)
-                            .position(x: max(1, tickX - 9), y: geometry.size.height / 2)
-                    }
-                }
-            }
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        configureTickOverlay()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        tickOverlay.frame = bounds
+        bringSubviewToFront(tickOverlay)
+        refreshChapterMarkers()
+    }
+
+    func refreshChapterMarkers() {
+        tickOverlay.positions = chapterPositions
+        tickOverlay.trackRect = trackRect(forBounds: bounds)
+        let range = maximumValue - minimumValue
+        tickOverlay.currentPosition = range > 0
+            ? CGFloat((value - minimumValue) / range)
+            : 0
+        tickOverlay.setNeedsDisplay()
+    }
+
+    private func configureTickOverlay() {
+        tickOverlay.isUserInteractionEnabled = false
+        tickOverlay.backgroundColor = .clear
+        addSubview(tickOverlay)
+    }
+}
+
+private final class ChapterTickOverlay: UIView {
+    var positions: [Double] = []
+    var trackRect = CGRect.zero
+    var currentPosition: CGFloat = 0
+
+    override func draw(_ rect: CGRect) {
+        guard trackRect.width > 0 else { return }
+        let context = UIGraphicsGetCurrentContext()
+        let current = min(max(currentPosition, 0), 1)
+
+        for position in positions {
+            let normalized = min(max(CGFloat(position), 0), 1)
+            let x = trackRect.minX + normalized * trackRect.width
+            let color = normalized <= current
+                ? UIColor.black.withAlphaComponent(0.62)
+                : UIColor.white.withAlphaComponent(0.68)
+            context?.setFillColor(color.cgColor)
+            context?.fill(CGRect(x: x - 0.5, y: trackRect.midY - 3, width: 1, height: 6))
         }
     }
 }
