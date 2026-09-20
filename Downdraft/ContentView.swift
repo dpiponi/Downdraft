@@ -1313,8 +1313,11 @@ private struct CircularPageSlider: UIViewRepresentable {
     func makeUIView(context: Context) -> UISlider {
         let slider = UISlider()
         slider.isContinuous = true
-        slider.minimumTrackTintColor = .white
-        slider.maximumTrackTintColor = UIColor.white.withAlphaComponent(0.32)
+        // The SwiftUI layer beneath draws the glass track, progress, and
+        // chapter ticks. UIKit supplies only the dependable drag behaviour
+        // and the circular thumb above it.
+        slider.minimumTrackTintColor = .clear
+        slider.maximumTrackTintColor = .clear
         slider.setThumbImage(Self.circularThumb, for: .normal)
         slider.setThumbImage(Self.circularThumb, for: .highlighted)
         slider.addTarget(context.coordinator, action: #selector(Coordinator.beganEditing), for: .touchDown)
@@ -1374,17 +1377,43 @@ private struct ChapterMarkers: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ForEach(Array(positions.enumerated()), id: \.offset) { _, position in
-                Rectangle()
-                    // On the filled side of the track, a dark tick remains
-                    // visible without competing with the progress itself.
-                    .fill(position <= currentPosition ? .black.opacity(0.58) : .white.opacity(0.62))
-                    .frame(width: 1, height: 6)
-                    .position(
-                        x: min(max(CGFloat(position) * geometry.size.width, 1), geometry.size.width - 1),
-                        y: geometry.size.height / 2
-                    )
+            let thumbRadius: CGFloat = 7
+            let trackWidth = max(0, geometry.size.width - thumbRadius * 2)
+            let xPosition = { (position: Double) in
+                thumbRadius + CGFloat(position) * trackWidth
             }
+
+            ZStack(alignment: .leading) {
+                glassTrack
+                    .frame(height: 10)
+                    .padding(.horizontal, thumbRadius)
+
+                Capsule()
+                    .fill(.white.opacity(0.78))
+                    .frame(width: max(0, xPosition(currentPosition) - thumbRadius), height: 4)
+                    .offset(x: thumbRadius)
+
+                ForEach(Array(positions.enumerated()), id: \.offset) { _, position in
+                    Rectangle()
+                        // On the filled side of the track, a dark tick remains
+                        // visible without competing with the progress itself.
+                        .fill(position <= currentPosition ? .black.opacity(0.58) : .white.opacity(0.7))
+                        .frame(width: 1, height: 8)
+                        .position(x: xPosition(position), y: geometry.size.height / 2)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var glassTrack: some View {
+        if #available(iOS 26.0, *) {
+            Capsule()
+                .fill(.clear)
+                .glassEffect(.regular, in: Capsule())
+        } else {
+            Capsule()
+                .fill(.white.opacity(0.26))
         }
     }
 }
