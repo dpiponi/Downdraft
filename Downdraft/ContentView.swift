@@ -1434,11 +1434,11 @@ private final class ChapterTickOverlay: UIView {
 
         for tick in ticks {
             // A tick under either half of the white circular handle needs the
-            // same dark treatment as one on the filled track. In particular,
+            // same muted treatment as one on the filled track. In particular,
             // this covers marks just to the handle's right of centre.
             let isCoveredByThumb = abs(tick.x - thumbCenter) <= thumbRadius
             let color = tick.isPast || isCoveredByThumb
-                ? UIColor.black.withAlphaComponent(0.78)
+                ? UIColor(white: 0.38, alpha: 0.9)
                 : UIColor.white.withAlphaComponent(0.82)
             context?.setFillColor(color.cgColor)
             context?.fill(CGRect(x: tick.x - 1, y: bounds.midY - 4, width: 2, height: 8))
