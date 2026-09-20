@@ -93,6 +93,10 @@ struct PDFDocumentView: UIViewRepresentable {
         private var observedMotionRecognizers = Set<ObjectIdentifier>()
         private var observedPinchRecognizers = Set<ObjectIdentifier>()
         private var protectedPageIndex: Int?
+        // PDFKit commonly exposes page zero while a newly assigned document
+        // is still laying out. Never let that setup value replace a restored
+        // reading position.
+        private var initialRestorePageIndex: Int?
         private var expectedNavigationPageIndex: Int?
         private var transientPageChangeTokens = Set<UUID>()
         var lastKnownPageIndex = 0
@@ -128,6 +132,7 @@ struct PDFDocumentView: UIViewRepresentable {
             observedPDFView = pdfView
             let restoredPageIndex = validPageIndex(pageIndex, in: document) ?? 0
             lastKnownPageIndex = restoredPageIndex
+            initialRestorePageIndex = restoredPageIndex
             pdfView.document = document
             if let page = document.page(at: restoredPageIndex) {
                 pdfView.go(to: page)
@@ -135,13 +140,70 @@ struct PDFDocumentView: UIViewRepresentable {
             loadedDocument = document
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                self.endTransientPageChange(transientChange)
-                // PDFKit can finish its initial layout without a final
-                // page-change notification. Publish the settled visible page
-                // explicitly so a newly opened wide document can bookmark
-                // its first visible page immediately.
-                self.publishReadingPage(in: pdfView)
                 self.startObservingSearchHighlightDismissal(in: pdfView)
+                self.settleInitialRestore(
+                    restoredPageIndex,
+                    in: pdfView,
+                    transientChange: transientChange
+                )
+            }
+        }
+
+        /// Reapply the target after the first layout passes. PDFKit sometimes
+        /// has no final page-change notification, so confirmation comes from
+        /// its actual current page rather than from a notification. Until
+        /// then, `publishReadingPage` is deliberately a no-op.
+        private func settleInitialRestore(
+            _ pageIndex: Int,
+            in pdfView: PDFView,
+            transientChange: UUID,
+            attemptsRemaining: Int = 2
+        ) {
+            guard initialRestorePageIndex == pageIndex,
+                  let document = pdfView.document,
+                  let page = document.page(at: pageIndex) else {
+                endTransientPageChange(transientChange)
+                return
+            }
+
+            pdfView.layoutIfNeeded()
+            let currentPageIndex = pdfView.currentPage.map { document.index(for: $0) }
+            if currentPageIndex != pageIndex {
+                pdfView.go(to: page)
+            }
+
+            DispatchQueue.main.async { [weak self, weak pdfView] in
+                guard let self, let pdfView else { return }
+                guard self.initialRestorePageIndex == pageIndex,
+                      let document = pdfView.document else {
+                    self.endTransientPageChange(transientChange)
+                    return
+                }
+
+                if pdfView.currentPage.map({ document.index(for: $0) }) == pageIndex {
+                    self.initialRestorePageIndex = nil
+                    self.lastKnownPageIndex = pageIndex
+                    self.onPDFKitCurrentPageChanged(pageIndex)
+                    self.endTransientPageChange(transientChange)
+                } else if attemptsRemaining > 0 {
+                    self.settleInitialRestore(
+                        pageIndex,
+                        in: pdfView,
+                        transientChange: transientChange,
+                        attemptsRemaining: attemptsRemaining - 1
+                    )
+                } else {
+                    // Do not publish an unconfirmed page. Keep the saved
+                    // position as the source of truth and briefly protect it
+                    // from any final PDFKit page-zero notification.
+                    self.initialRestorePageIndex = nil
+                    self.lastKnownPageIndex = pageIndex
+                    self.protectedPageIndex = pageIndex
+                    self.endTransientPageChange(transientChange)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                        self?.protectedPageIndex = nil
+                    }
+                }
             }
         }
         func startObservingPageChanges(in pdfView: PDFView) {
@@ -392,6 +454,10 @@ struct PDFDocumentView: UIViewRepresentable {
         }
 
         private func publishReadingPage(in pdfView: PDFView, fallback: Int? = nil) {
+            // Initial PDFKit layout may briefly describe page zero, even after
+            // `go(to:)` has been asked to restore a later page. It is not a
+            // reader action and must never be persisted or synced.
+            guard initialRestorePageIndex == nil else { return }
             guard let document = pdfView.document else { return }
             if let currentPage = pdfView.currentPage {
                 onPDFKitCurrentPageChanged(document.index(for: currentPage))
