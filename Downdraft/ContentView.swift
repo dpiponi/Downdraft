@@ -1246,7 +1246,7 @@ private struct PageScrubber: View {
                 .monospacedDigit()
                 .frame(width: 104, alignment: .leading)
 
-            Slider(
+            CircularPageSlider(
                 value: Binding(
                     get: { Double(pendingPageIndex ?? pageIndex) },
                     set: { newValue in
@@ -1261,8 +1261,7 @@ private struct PageScrubber: View {
                         seek(newPageIndex)
                     }
                 ),
-                in: 0...Double(max(pageCount - 1, 0)),
-                step: 1,
+                range: 0...Double(max(pageCount - 1, 0)),
                 onEditingChanged: { isEditing in
                     if isEditing {
                         if pageIndexWhenScrubbingBegan == nil {
@@ -1279,7 +1278,6 @@ private struct PageScrubber: View {
                     pendingPageIndex = nil
                 }
             )
-            .controlSize(.small)
             .overlay {
                 ChapterMarkers(positions: chapterPositions)
                     .allowsHitTesting(false)
@@ -1296,6 +1294,72 @@ private struct PageScrubber: View {
             }
         }
     }
+}
+
+/// A UIKit slider gives the reader a precise, consistently circular thumb.
+/// It otherwise preserves the standard slider interaction model.
+private struct CircularPageSlider: UIViewRepresentable {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let onEditingChanged: (Bool) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeUIView(context: Context) -> UISlider {
+        let slider = UISlider()
+        slider.isContinuous = true
+        slider.minimumTrackTintColor = .white
+        slider.maximumTrackTintColor = UIColor.white.withAlphaComponent(0.32)
+        slider.setThumbImage(Self.circularThumb, for: .normal)
+        slider.setThumbImage(Self.circularThumb, for: .highlighted)
+        slider.addTarget(context.coordinator, action: #selector(Coordinator.beganEditing), for: .touchDown)
+        slider.addTarget(context.coordinator, action: #selector(Coordinator.valueChanged), for: .valueChanged)
+        slider.addTarget(context.coordinator, action: #selector(Coordinator.finishedEditing), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+        return slider
+    }
+
+    func updateUIView(_ slider: UISlider, context: Context) {
+        context.coordinator.parent = self
+        slider.minimumValue = Float(range.lowerBound)
+        slider.maximumValue = Float(range.upperBound)
+        // A page can change because of a link, contents entry, history action,
+        // or normal reading. Never fight a finger which is currently dragging.
+        if !slider.isTracking {
+            slider.value = Float(value)
+        }
+    }
+
+    final class Coordinator: NSObject {
+        var parent: CircularPageSlider
+
+        init(_ parent: CircularPageSlider) {
+            self.parent = parent
+        }
+
+        @MainActor @objc func beganEditing() {
+            parent.onEditingChanged(true)
+        }
+
+        @MainActor @objc func valueChanged(_ slider: UISlider) {
+            parent.value = Double(slider.value.rounded())
+        }
+
+        @MainActor @objc func finishedEditing() {
+            parent.onEditingChanged(false)
+        }
+    }
+
+    private static let circularThumb: UIImage = {
+        let diameter: CGFloat = 14
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: diameter, height: diameter))
+        return renderer.image { _ in
+            let bounds = CGRect(origin: .zero, size: CGSize(width: diameter, height: diameter))
+            UIColor.white.setFill()
+            UIBezierPath(ovalIn: bounds.insetBy(dx: 0.5, dy: 0.5)).fill()
+        }
+    }()
 }
 
 /// Fine vertical ticks indicate the starts of top-level outline entries.
