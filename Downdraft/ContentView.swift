@@ -507,7 +507,7 @@ struct ContentView: View {
         HStack(spacing: isPhone ? 8 : 18) {
             if !isPhone {
                 Button(action: toggleSharedPositionLink) {
-                    Image(systemName: followsSharedPosition ? "link" : "link.badge.minus")
+                    sharedPositionLinkIcon
                         .frame(width: 48, height: 48)
                         .contentShape(Rectangle())
                 }
@@ -560,7 +560,7 @@ struct ContentView: View {
                 .accessibilityLabel("Reader layout")
             } else {
                 Button(action: toggleSharedPositionLink) {
-                    Image(systemName: followsSharedPosition ? "link" : "link.badge.minus")
+                    sharedPositionLinkIcon
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
@@ -600,6 +600,23 @@ struct ContentView: View {
         .tint(.white)
         .foregroundStyle(.white)
         .font(.title3.weight(.medium))
+    }
+
+    private var sharedPositionLinkIcon: some View {
+        Image(systemName: "link")
+            .overlay(alignment: .bottomTrailing) {
+                if !followsSharedPosition {
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 13, height: 13)
+                        .overlay {
+                            Image(systemName: "minus")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(.black)
+                        }
+                        .offset(x: 4, y: 4)
+                }
+            }
     }
 
     private func bookmarkControls(visibleLimit: Int) -> some View {
