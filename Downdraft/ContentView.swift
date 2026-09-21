@@ -507,7 +507,7 @@ struct ContentView: View {
         HStack(spacing: isPhone ? 8 : 18) {
             if !isPhone {
                 Button(action: toggleSharedPositionLink) {
-                    Image(systemName: followsSharedPosition ? "link" : "link.slash")
+                    Image(systemName: followsSharedPosition ? "link" : "link.badge.minus")
                         .frame(width: 48, height: 48)
                         .contentShape(Rectangle())
                 }
@@ -560,7 +560,7 @@ struct ContentView: View {
                 .accessibilityLabel("Reader layout")
             } else {
                 Button(action: toggleSharedPositionLink) {
-                    Image(systemName: followsSharedPosition ? "link" : "link.slash")
+                    Image(systemName: followsSharedPosition ? "link" : "link.badge.minus")
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
