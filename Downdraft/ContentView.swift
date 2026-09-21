@@ -42,6 +42,7 @@ struct ContentView: View {
     @FocusState private var isSearchFieldFocused: Bool
     @State private var bookmarkPreview: BookmarkPreview?
     @State private var followsSharedPosition = true
+    @State private var showsChapterMarks = true
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -174,7 +175,11 @@ struct ContentView: View {
         }
         .sheet(isPresented: $isShowingContents) {
             if let outline = selectedDocument?.pdfDocument?.outlineRoot {
-                TableOfContentsView(entries: TableOfContentsEntry.children(of: outline)) { destination in
+                TableOfContentsView(
+                    entries: TableOfContentsEntry.children(of: outline),
+                    showsChapterMarks: showsChapterMarks,
+                    setShowsChapterMarks: setShowsChapterMarks
+                ) { destination in
                     clearSearch()
                     if let document = selectedDocument,
                        let page = destination.page {
@@ -335,7 +340,9 @@ struct ContentView: View {
     /// top-level entries make useful, restrained landmarks on the page bar
     /// without inspecting any additional document data.
     private func topLevelChapterPositions(in document: PDFDocument) -> [Double] {
-        guard document.pageCount > 1, let outline = document.outlineRoot else {
+        guard showsChapterMarks,
+              document.pageCount > 1,
+              let outline = document.outlineRoot else {
             return []
         }
 
@@ -930,6 +937,7 @@ struct ContentView: View {
     private func finishSelecting(_ document: OpenDocument) {
         let readingPreference = document.readingStateIdentity.map(DeviceReadingModeStore.preference(for:)) ?? .linked
         followsSharedPosition = readingPreference.followsSharedPosition
+        showsChapterMarks = readingPreference.showsChapterMarks
         if followsSharedPosition {
             restoreSharedReadingState(for: document)
         } else {
@@ -1072,6 +1080,12 @@ struct ContentView: View {
             pageCount: document.pdfDocument?.pageCount
         )
         saveDocuments()
+    }
+
+    private func setShowsChapterMarks(_ value: Bool) {
+        guard let identity = selectedDocument?.readingStateIdentity else { return }
+        showsChapterMarks = value
+        DeviceReadingModeStore.setShowsChapterMarks(value, for: identity)
     }
 
     private func validPageIndex(_ pageIndex: Int, in document: OpenDocument) -> Int {
@@ -1888,12 +1902,29 @@ private struct TableOfContentsEntry: Identifiable {
 
 private struct TableOfContentsView: View {
     let entries: [TableOfContentsEntry]
+    let showsChapterMarks: Bool
+    let setShowsChapterMarks: (Bool) -> Void
     let select: (PDFDestination) -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Button {
+                        setShowsChapterMarks(!showsChapterMarks)
+                    } label: {
+                        HStack {
+                            Text("Show chapter marks on slider")
+                            Spacer()
+                            if showsChapterMarks {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.primary)
+                }
                 OutlineGroup(entries, children: \.children) { entry in
                     if let destination = entry.destination {
                         Button(entry.title) {

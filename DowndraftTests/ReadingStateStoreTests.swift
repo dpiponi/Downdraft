@@ -102,4 +102,13 @@ final class ReadingStateStoreTests: XCTestCase {
         DeviceReadingModeStore.link(identity)
         XCTAssertEqual(DeviceReadingModeStore.preference(for: identity), .linked)
     }
+
+    func testExistingDevicePreferenceDefaultsToShowingChapterMarks() throws {
+        let legacyData = Data(#"{"followsSharedPosition":false,"detachedPageIndex":8}"#.utf8)
+        let preference = try JSONDecoder().decode(DeviceReadingModeStore.Preference.self, from: legacyData)
+
+        XCTAssertFalse(preference.followsSharedPosition)
+        XCTAssertEqual(preference.detachedPageIndex, 8)
+        XCTAssertTrue(preference.showsChapterMarks)
+    }
 }

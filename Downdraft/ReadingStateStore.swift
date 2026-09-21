@@ -257,6 +257,32 @@ enum DeviceReadingModeStore {
     struct Preference: Codable, Equatable {
         var followsSharedPosition: Bool
         var detachedPageIndex: Int?
+        var showsChapterMarks: Bool
+
+        init(
+            followsSharedPosition: Bool,
+            detachedPageIndex: Int?,
+            showsChapterMarks: Bool = true
+        ) {
+            self.followsSharedPosition = followsSharedPosition
+            self.detachedPageIndex = detachedPageIndex
+            self.showsChapterMarks = showsChapterMarks
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case followsSharedPosition
+            case detachedPageIndex
+            case showsChapterMarks
+        }
+
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            followsSharedPosition = try values.decodeIfPresent(Bool.self, forKey: .followsSharedPosition) ?? true
+            detachedPageIndex = try values.decodeIfPresent(Int.self, forKey: .detachedPageIndex)
+            // Existing preferences predate this setting and should retain the
+            // original, uncluttered-by-default behaviour of showing marks.
+            showsChapterMarks = try values.decodeIfPresent(Bool.self, forKey: .showsChapterMarks) ?? true
+        }
 
         static let linked = Preference(followsSharedPosition: true, detachedPageIndex: nil)
     }
@@ -286,6 +312,12 @@ enum DeviceReadingModeStore {
         var preference = preference(for: identity)
         preference.followsSharedPosition = true
         preference.detachedPageIndex = nil
+        save(preference, for: identity)
+    }
+
+    static func setShowsChapterMarks(_ showsChapterMarks: Bool, for identity: String) {
+        var preference = preference(for: identity)
+        preference.showsChapterMarks = showsChapterMarks
         save(preference, for: identity)
     }
 
