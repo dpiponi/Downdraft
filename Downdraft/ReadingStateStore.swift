@@ -249,3 +249,68 @@ enum ReadingStateStore {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 }
+
+/// Stores the reading-position relationship for this device only. The choice
+/// to follow a PDF's shared position is deliberately not synced: the same
+/// PDF can be linked on an iPhone while remaining detached on an iPad.
+enum DeviceReadingModeStore {
+    struct Preference: Codable, Equatable {
+        var followsSharedPosition: Bool
+        var detachedPageIndex: Int?
+
+        static let linked = Preference(followsSharedPosition: true, detachedPageIndex: nil)
+    }
+
+    private static let preferencesKey = "device-reading-position-preferences"
+    nonisolated(unsafe) private static let defaults = UserDefaults.standard
+
+    static func preference(for identity: String) -> Preference {
+        preferences()[identity] ?? .linked
+    }
+
+    static func detach(_ identity: String, at pageIndex: Int) {
+        var preference = preference(for: identity)
+        preference.followsSharedPosition = false
+        preference.detachedPageIndex = pageIndex
+        save(preference, for: identity)
+    }
+
+    static func updateDetachedPage(_ pageIndex: Int, for identity: String) {
+        var preference = preference(for: identity)
+        guard !preference.followsSharedPosition else { return }
+        preference.detachedPageIndex = pageIndex
+        save(preference, for: identity)
+    }
+
+    static func link(_ identity: String) {
+        var preference = preference(for: identity)
+        preference.followsSharedPosition = true
+        preference.detachedPageIndex = nil
+        save(preference, for: identity)
+    }
+
+    static func removePreference(for identity: String) {
+        var values = preferences()
+        values.removeValue(forKey: identity)
+        save(values)
+    }
+
+    private static func preferences() -> [String: Preference] {
+        guard let data = defaults.data(forKey: preferencesKey),
+              let values = try? JSONDecoder().decode([String: Preference].self, from: data) else {
+            return [:]
+        }
+        return values
+    }
+
+    private static func save(_ preference: Preference, for identity: String) {
+        var values = preferences()
+        values[identity] = preference
+        save(values)
+    }
+
+    private static func save(_ values: [String: Preference]) {
+        guard let data = try? JSONEncoder().encode(values) else { return }
+        defaults.set(data, forKey: preferencesKey)
+    }
+}

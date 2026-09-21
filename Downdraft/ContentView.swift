@@ -41,6 +41,7 @@ struct ContentView: View {
     @State private var loadingMessage = "Opening PDF…"
     @FocusState private var isSearchFieldFocused: Bool
     @State private var bookmarkPreview: BookmarkPreview?
+    @State private var followsSharedPosition = true
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -79,6 +80,10 @@ struct ContentView: View {
 
     private var isSearchActive: Bool {
         isSearchFieldFocused || !searchText.isEmpty
+    }
+
+    private var canToggleSharedPositionLink: Bool {
+        selectedDocument?.readingStateIdentity != nil
     }
 
     private var visibleBookmarks: [(index: Int, pageIndex: Int)] {
@@ -501,12 +506,13 @@ struct ContentView: View {
     private var primaryReaderControls: some View {
         HStack(spacing: isPhone ? 8 : 18) {
             if !isPhone {
-                Button { isShowingFilePicker = true } label: {
-                    Image(systemName: "folder")
+                Button(action: toggleSharedPositionLink) {
+                    Image(systemName: followsSharedPosition ? "link" : "link.slash")
                         .frame(width: 48, height: 48)
                         .contentShape(Rectangle())
                 }
-                .accessibilityLabel("Open PDF")
+                .accessibilityLabel(followsSharedPosition ? "Following shared position" : "Using detached position")
+                .disabled(!canToggleSharedPositionLink)
                 if selectedDocument?.pdfDocument?.outlineRoot?.numberOfChildren ?? 0 > 0 {
                     Button { isShowingContents = true } label: {
                         Image(systemName: "list.bullet")
@@ -553,12 +559,13 @@ struct ContentView: View {
                 }
                 .accessibilityLabel("Reader layout")
             } else {
-                Button { isShowingFilePicker = true } label: {
-                    Image(systemName: "folder")
+                Button(action: toggleSharedPositionLink) {
+                    Image(systemName: followsSharedPosition ? "link" : "link.slash")
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
-                .accessibilityLabel("Open PDF")
+                .accessibilityLabel(followsSharedPosition ? "Following shared position" : "Using detached position")
+                .disabled(!canToggleSharedPositionLink)
                 Button {
                     presentSearch()
                 } label: {
@@ -904,7 +911,16 @@ struct ContentView: View {
     }
 
     private func finishSelecting(_ document: OpenDocument) {
-        restoreSharedReadingState(for: document)
+        let readingPreference = document.readingStateIdentity.map(DeviceReadingModeStore.preference(for:)) ?? .linked
+        followsSharedPosition = readingPreference.followsSharedPosition
+        if followsSharedPosition {
+            restoreSharedReadingState(for: document)
+        } else {
+            refreshSharedBookmarks(for: document)
+            if let detachedPageIndex = readingPreference.detachedPageIndex {
+                document.lastPageIndex = validPageIndex(detachedPageIndex, in: document)
+            }
+        }
         document.lastSelectedAt = Date()
         treatsFirstPageAsCover = document.displaysAsBook
         readsHorizontally = document.readsHorizontally
@@ -1002,6 +1018,50 @@ struct ContentView: View {
         saveDocuments()
     }
 
+    private func toggleSharedPositionLink() {
+        guard let document = selectedDocument,
+              let identity = document.readingStateIdentity else { return }
+
+        if followsSharedPosition {
+            DeviceReadingModeStore.detach(identity, at: document.lastPageIndex)
+            followsSharedPosition = false
+            saveDocuments()
+            return
+        }
+
+        // Joining never writes a page to iCloud. It adopts the most recent
+        // shared page currently known on this device; the user can then use
+        // Back as an intentional, shareable return to their detached page.
+        let sharedState = sharedReadingState(for: document, usesDocumentFallback: false)
+        let localPageIndex = document.lastPageIndex
+        let sharedPageIndex = validPageIndex(sharedState.page.index, in: document)
+        DeviceReadingModeStore.link(identity)
+        followsSharedPosition = true
+        document.lastPageIndex = sharedPageIndex
+        document.lastPageModifiedAt = sharedState.page.modifiedAt
+        document.bookmarkPageIndices = OpenDocument.deduplicatedBookmarks(sharedState.bookmarks.map(\.pageIndex))
+        bookmarkPageIndices = document.bookmarkPageIndices
+
+        if sharedPageIndex != localPageIndex {
+            recordNavigation(in: document, from: localPageIndex, to: sharedPageIndex)
+            scrubbedPageIndex = sharedPageIndex
+            pdfKitCurrentPageIndex = sharedPageIndex
+            scrubberRevision += 1
+            requestPage(sharedPageIndex)
+        }
+        RecentDocumentStore.updateReadingPosition(
+            bookmarkData: document.bookmarkData,
+            pageIndex: sharedPageIndex,
+            pageCount: document.pdfDocument?.pageCount
+        )
+        saveDocuments()
+    }
+
+    private func validPageIndex(_ pageIndex: Int, in document: OpenDocument) -> Int {
+        guard let pageCount = document.pdfDocument?.pageCount, pageCount > 0 else { return max(0, pageIndex) }
+        return min(max(pageIndex, 0), pageCount - 1)
+    }
+
     private func layoutMenuLabel(_ title: String, selected: Bool) -> some View {
         HStack {
             Text(title)
@@ -1056,9 +1116,11 @@ struct ContentView: View {
                 pageIndex,
                 at: index,
                 for: identity,
-                fallbackPageIndex: document.lastPageIndex,
+                // A detached page must never become an implicit shared page
+                // merely because its bookmarks were edited.
+                fallbackPageIndex: followsSharedPosition ? document.lastPageIndex : 0,
                 fallbackBookmarks: document.bookmarkPageIndices,
-                fallbackPageModifiedAt: document.lastPageModifiedAt
+                fallbackPageModifiedAt: followsSharedPosition ? document.lastPageModifiedAt : .distantPast
             )
         }
         saveDocuments()
@@ -1092,12 +1154,17 @@ struct ContentView: View {
               document.lastPageIndex != pageIndex else { return }
         document.lastPageIndex = pageIndex
         document.lastPageModifiedAt = Date()
-        if let identity = document.readingStateIdentity {
+        let documentFollowsSharedPosition = document.readingStateIdentity
+            .map { DeviceReadingModeStore.preference(for: $0).followsSharedPosition }
+            ?? true
+        if let identity = document.readingStateIdentity, documentFollowsSharedPosition {
             ReadingStateStore.savePage(
                 pageIndex,
                 for: identity,
                 fallbackBookmarks: document.bookmarkPageIndices
             )
+        } else if let identity = document.readingStateIdentity {
+            DeviceReadingModeStore.updateDetachedPage(pageIndex, for: identity)
         }
         RecentDocumentStore.updateReadingPosition(
             bookmarkData: document.bookmarkData,
@@ -1190,16 +1257,30 @@ struct ContentView: View {
     }
 
     private func restoreSharedReadingState(for document: OpenDocument) {
-        guard let identity = document.readingStateIdentity else { return }
-        let state = ReadingStateStore.state(
-            for: identity,
-            fallbackPageIndex: document.lastPageIndex,
-            fallbackBookmarks: document.bookmarkPageIndices,
-            fallbackPageModifiedAt: document.lastPageModifiedAt
-        )
+        let state = sharedReadingState(for: document, usesDocumentFallback: true)
         document.lastPageIndex = state.page.index
         document.lastPageModifiedAt = state.page.modifiedAt
         document.bookmarkPageIndices = OpenDocument.deduplicatedBookmarks(state.bookmarks.map(\.pageIndex))
+    }
+
+    private func refreshSharedBookmarks(for document: OpenDocument) {
+        let state = sharedReadingState(for: document, usesDocumentFallback: false)
+        document.bookmarkPageIndices = OpenDocument.deduplicatedBookmarks(state.bookmarks.map(\.pageIndex))
+    }
+
+    private func sharedReadingState(
+        for document: OpenDocument,
+        usesDocumentFallback: Bool
+    ) -> ReadingStateStore.State {
+        guard let identity = document.readingStateIdentity else {
+            return .initial(pageIndex: 0, bookmarks: document.bookmarkPageIndices)
+        }
+        return ReadingStateStore.state(
+            for: identity,
+            fallbackPageIndex: usesDocumentFallback ? document.lastPageIndex : 0,
+            fallbackBookmarks: document.bookmarkPageIndices,
+            fallbackPageModifiedAt: usesDocumentFallback ? document.lastPageModifiedAt : .distantPast
+        )
     }
 
     private func refreshSharedReadingState() {
@@ -1208,14 +1289,18 @@ struct ContentView: View {
         let previousPage = document.lastPageIndex
         let state = ReadingStateStore.state(
             for: identity,
-            fallbackPageIndex: previousPage,
+            fallbackPageIndex: followsSharedPosition ? previousPage : 0,
             fallbackBookmarks: document.bookmarkPageIndices,
-            fallbackPageModifiedAt: document.lastPageModifiedAt
+            fallbackPageModifiedAt: followsSharedPosition ? document.lastPageModifiedAt : .distantPast
         )
-        document.lastPageIndex = state.page.index
-        document.lastPageModifiedAt = state.page.modifiedAt
         document.bookmarkPageIndices = OpenDocument.deduplicatedBookmarks(state.bookmarks.map(\.pageIndex))
         bookmarkPageIndices = document.bookmarkPageIndices
+        guard followsSharedPosition else {
+            saveDocuments()
+            return
+        }
+        document.lastPageIndex = state.page.index
+        document.lastPageModifiedAt = state.page.modifiedAt
         if state.page.index != previousPage {
             scrubbedPageIndex = state.page.index
             scrubberRevision += 1

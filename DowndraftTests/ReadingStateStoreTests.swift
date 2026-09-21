@@ -83,4 +83,23 @@ final class ReadingStateStoreTests: XCTestCase {
 
         XCTAssertEqual(ReadingStateStore.merged(cloud, fallback).page.index, 47)
     }
+
+    func testDetachedPositionIsLocalAndClearedWhenRelinking() {
+        let identity = "test-local-position-\(UUID().uuidString)"
+        defer { DeviceReadingModeStore.removePreference(for: identity) }
+
+        XCTAssertEqual(DeviceReadingModeStore.preference(for: identity), .linked)
+
+        DeviceReadingModeStore.detach(identity, at: 12)
+        XCTAssertEqual(
+            DeviceReadingModeStore.preference(for: identity),
+            .init(followsSharedPosition: false, detachedPageIndex: 12)
+        )
+
+        DeviceReadingModeStore.updateDetachedPage(19, for: identity)
+        XCTAssertEqual(DeviceReadingModeStore.preference(for: identity).detachedPageIndex, 19)
+
+        DeviceReadingModeStore.link(identity)
+        XCTAssertEqual(DeviceReadingModeStore.preference(for: identity), .linked)
+    }
 }
