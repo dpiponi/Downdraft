@@ -94,6 +94,7 @@ struct PDFDocumentView: UIViewRepresentable {
         private var observedPinchRecognizers = Set<ObjectIdentifier>()
         private var protectedPageIndex: Int?
         private var layoutRestorePageIndex: Int?
+        private var lastSettledPDFViewBounds: CGRect?
         // PDFKit commonly exposes page zero while a newly assigned document
         // is still laying out. Never let that setup value replace a restored
         // reading position.
@@ -134,6 +135,7 @@ struct PDFDocumentView: UIViewRepresentable {
             let restoredPageIndex = validPageIndex(pageIndex, in: document) ?? 0
             lastKnownPageIndex = restoredPageIndex
             initialRestorePageIndex = restoredPageIndex
+            lastSettledPDFViewBounds = pdfView.bounds
             pdfView.document = document
             if let page = document.page(at: restoredPageIndex) {
                 pdfView.go(to: page)
@@ -184,6 +186,7 @@ struct PDFDocumentView: UIViewRepresentable {
                 if pdfView.currentPage.map({ document.index(for: $0) }) == pageIndex {
                     self.initialRestorePageIndex = nil
                     self.lastKnownPageIndex = pageIndex
+                    self.noteSettledBounds(of: pdfView)
                     self.onPDFKitCurrentPageChanged(pageIndex)
                     self.endTransientPageChange(transientChange)
                 } else if attemptsRemaining > 0 {
@@ -370,6 +373,7 @@ struct PDFDocumentView: UIViewRepresentable {
                 if pdfView.currentPage.map({ document.index(for: $0) }) == pageIndex {
                     self.layoutRestorePageIndex = nil
                     self.lastKnownPageIndex = pageIndex
+                    self.noteSettledBounds(of: pdfView)
                     self.onPDFKitCurrentPageChanged(pageIndex)
                     self.endTransientPageChange(transientChange)
                 } else if attemptsRemaining > 0 {
@@ -472,6 +476,16 @@ struct PDFDocumentView: UIViewRepresentable {
             let previousPageIndex = lastKnownPageIndex
             hideSearchHighlight()
 
+            // On rotation, PDFKit can announce page zero before SwiftUI has
+            // delivered the new layout values to `updatePageLayout`. Catch
+            // that earlier notification by comparing the view's settled size,
+            // rather than allowing it to overwrite `lastKnownPageIndex`.
+            if currentPageIndex == 0,
+               previousPageIndex > 0,
+               hasUnsettledBoundsChange(in: pdfView) {
+                return
+            }
+
             // PDFKit reports page zero while it is rebuilding its private
             // scroll view for an otherwise non-navigational resize.  Keep the
             // reading position authoritative until that rebuild is complete.
@@ -554,7 +568,18 @@ struct PDFDocumentView: UIViewRepresentable {
                 ?? fallback ?? pdfView.currentPage.map { document.index(for: $0) }
                 ?? lastKnownPageIndex
             lastKnownPageIndex = readingPageIndex
+            noteSettledBounds(of: pdfView)
             onPageChanged(readingPageIndex)
+        }
+
+        private func hasUnsettledBoundsChange(in pdfView: PDFView) -> Bool {
+            guard let lastSettledPDFViewBounds else { return false }
+            return abs(lastSettledPDFViewBounds.width - pdfView.bounds.width) > 1
+                || abs(lastSettledPDFViewBounds.height - pdfView.bounds.height) > 1
+        }
+
+        private func noteSettledBounds(of pdfView: PDFView) {
+            lastSettledPDFViewBounds = pdfView.bounds
         }
 
         @objc private func readerTapped(_ recognizer: UITapGestureRecognizer) {
