@@ -22,7 +22,6 @@ struct ContentView: View {
     @State private var isShowingContents = false
     @State private var isShowingMetadata = false
     @State private var outlineDestination: PDFDestination?
-    @State private var treatsFirstPageAsCover = true
     @State private var readsHorizontally = false
     @State private var scrubbedPageIndex = 0
     @State private var pdfKitCurrentPageIndex: Int?
@@ -35,7 +34,6 @@ struct ContentView: View {
     // reference-type document's navigation history.
     @State private var navigationRevision = 0
     @State private var scrubberRevision = 0
-    @State private var deviceOrientation = UIDevice.current.orientation
     @State private var isSearchPresented = false
     @State private var selectedPDFText: String?
     @State private var loadingMessage = "Opening PDF…"
@@ -214,8 +212,6 @@ struct ContentView: View {
             Text(errorMessage ?? "Unknown error")
         }
         .onAppear {
-            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
-            deviceOrientation = UIDevice.current.orientation
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--ui-testing-fixture") {
                 installUITestFixture()
@@ -235,11 +231,6 @@ struct ContentView: View {
                     }
                 }
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(
-            for: UIDevice.orientationDidChangeNotification
-        )) { _ in
-            deviceOrientation = UIDevice.current.orientation
         }
         .onReceive(NotificationCenter.default.publisher(
             for: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
@@ -272,8 +263,8 @@ struct ContentView: View {
                 document: pdfDocument,
                 initialPageIndex: document.lastPageIndex,
                 isReaderFocused: isReaderFocused,
-                isLandscape: !isPhone && isLandscapeInterface,
-                displaysAsBook: treatsFirstPageAsCover,
+                isLandscape: false,
+                displaysAsBook: false,
                 readsHorizontally: readsHorizontally,
                 searchSelection: isSelected ? currentSearchSelection : nil,
                 outlineDestination: isSelected ? outlineDestination : nil,
@@ -535,18 +526,6 @@ struct ContentView: View {
                 }
                 .accessibilityLabel("PDF information")
                 Menu {
-                    Section("First Page") {
-                        Button {
-                            setFirstPageCover(true)
-                        } label: {
-                            layoutMenuLabel("First page alone", selected: treatsFirstPageAsCover)
-                        }
-                        Button {
-                            setFirstPageCover(false)
-                        } label: {
-                            layoutMenuLabel("First page in spread", selected: !treatsFirstPageAsCover)
-                        }
-                    }
                     Section("Reading Direction") {
                         Button {
                             setReadingDirection(horizontal: false)
@@ -560,7 +539,7 @@ struct ContentView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: treatsFirstPageAsCover ? "rectangle.split.2x1" : "rectangle")
+                    Image(systemName: readsHorizontally ? "arrow.left.and.right" : "arrow.up.and.down")
                         .frame(width: 48, height: 48)
                         .contentShape(Rectangle())
                 }
@@ -805,20 +784,6 @@ struct ContentView: View {
     }
 
 
-    private var isLandscapeInterface: Bool {
-        if deviceOrientation.isLandscape {
-            return true
-        }
-        if deviceOrientation.isPortrait {
-            return false
-        }
-        return UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?
-            .interfaceOrientation
-            .isLandscape ?? false
-    }
-
     private func toggleReaderFocus() {
         withAnimation(.easeInOut(duration: 0.24)) {
             if !isReaderFocused {
@@ -947,7 +912,6 @@ struct ContentView: View {
             }
         }
         document.lastSelectedAt = Date()
-        treatsFirstPageAsCover = document.displaysAsBook
         readsHorizontally = document.readsHorizontally
         scrubbedPageIndex = document.lastPageIndex
         pdfKitCurrentPageIndex = document.lastPageIndex
@@ -1029,12 +993,6 @@ struct ContentView: View {
         if isPhone {
             isSearchPresented = false
         }
-    }
-
-    private func setFirstPageCover(_ value: Bool) {
-        treatsFirstPageAsCover = value
-        selectedDocument?.displaysAsBook = value
-        saveDocuments()
     }
 
     private func setReadingDirection(horizontal: Bool) {
@@ -1183,6 +1141,9 @@ struct ContentView: View {
     private func updatePage(_ pageIndex: Int, for id: OpenDocument.ID) {
         guard let document = documents.first(where: { $0.id == id }),
               document.lastPageIndex != pageIndex else { return }
+#if DEBUG
+        print("[Downdraft rotation] model update page=\(pageIndex) previous=\(document.lastPageIndex) selected=\(id == selectedDocumentID)")
+#endif
         document.lastPageIndex = pageIndex
         document.lastPageModifiedAt = Date()
         let documentFollowsSharedPosition = document.readingStateIdentity
@@ -1222,6 +1183,9 @@ struct ContentView: View {
     }
 
     private func requestPage(_ pageIndex: Int) {
+#if DEBUG
+        print("[Downdraft rotation] model request page=\(pageIndex)")
+#endif
         requestedPageIndex = pageIndex
         requestedPageRequestID = UUID()
     }

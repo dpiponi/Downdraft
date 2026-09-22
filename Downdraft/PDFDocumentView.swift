@@ -26,6 +26,7 @@ struct PDFDocumentView: UIViewRepresentable {
         view.displayDirection = .vertical
         view.displayMode = .singlePageContinuous
         context.coordinator.startObservingPageChanges(in: view)
+        context.coordinator.startObservingOrientationChanges()
         context.coordinator.startObservingSelectionChanges(in: view)
         context.coordinator.startObservingReaderTaps(in: view)
         context.coordinator.startObservingSearchHighlightDismissal(in: view)
@@ -94,7 +95,10 @@ struct PDFDocumentView: UIViewRepresentable {
         private var observedPinchRecognizers = Set<ObjectIdentifier>()
         private var protectedPageIndex: Int?
         private var layoutRestorePageIndex: Int?
+        private var layoutRestoreToken: UUID?
+        private var firstSpreadProtection: (pageIndex: Int, deadline: Date)?
         private var lastSettledPDFViewBounds: CGRect?
+        private var orientationTransitionDeadline: Date?
         // PDFKit commonly exposes page zero while a newly assigned document
         // is still laying out. Never let that setup value replace a restored
         // reading position.
@@ -219,6 +223,31 @@ struct PDFDocumentView: UIViewRepresentable {
             )
         }
 
+        func startObservingOrientationChanges() {
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(orientationChanged),
+                name: UIDevice.orientationDidChangeNotification,
+                object: UIDevice.current
+            )
+        }
+
+        @objc private func orientationChanged(_ notification: Notification) {
+            let orientation = UIDevice.current.orientation
+            guard orientation.isPortrait || orientation.isLandscape else { return }
+            // PDFKit can announce page zero before the SwiftUI view receives
+            // its new bounds. Retain this signal briefly so that early
+            // announcement cannot be mistaken for reader navigation.
+            orientationTransitionDeadline = Date().addingTimeInterval(1.5)
+            rotationTrace("orientation transition began: \(orientation.rawValue)")
+        }
+
+        private var isOrientationTransitionInProgress: Bool {
+            guard let orientationTransitionDeadline else { return false }
+            return orientationTransitionDeadline > Date()
+        }
+
         func startObservingSelectionChanges(in pdfView: PDFView) {
             NotificationCenter.default.addObserver(
                 self,
@@ -295,9 +324,11 @@ struct PDFDocumentView: UIViewRepresentable {
             readsHorizontally: Bool,
             in pdfView: PDFView
         ) {
-            guard self.isLandscape != isLandscape
-                    || self.displaysAsBook != displaysAsBook
-                    || self.readsHorizontally != readsHorizontally else { return }
+            // A bounds change from device rotation is PDFKit's ordinary
+            // layout work. Do not change its display mode at the same time:
+            // that private rebuild is what can send the canvas to page one.
+            // The only explicit layout choice remaining is reading direction.
+            guard self.readsHorizontally != readsHorizontally else { return }
             self.isLandscape = isLandscape
             self.displaysAsBook = displaysAsBook
             self.readsHorizontally = readsHorizontally
@@ -305,12 +336,17 @@ struct PDFDocumentView: UIViewRepresentable {
             // private scroll view. The coordinator's last confirmed page is
             // the only trustworthy position during a layout transaction.
             let pageIndex = lastKnownPageIndex
+            rotationTrace(
+                "layout start target=\(pageIndex) bounds=\(pdfView.bounds.integral) landscape=\(isLandscape)"
+            )
             layoutRestorePageIndex = pageIndex
+            let layoutRestoreToken = UUID()
+            self.layoutRestoreToken = layoutRestoreToken
             let transientChange = beginTransientPageChange()
             UIView.performWithoutAnimation {
-                pdfView.displaysAsBook = displaysAsBook
+                pdfView.displaysAsBook = false
                 pdfView.displayDirection = readsHorizontally ? .horizontal : .vertical
-                pdfView.displayMode = isLandscape ? .twoUpContinuous : .singlePageContinuous
+                pdfView.displayMode = .singlePageContinuous
                 pdfView.layoutIfNeeded()
             }
             DispatchQueue.main.async { [weak self, weak pdfView] in
@@ -334,6 +370,7 @@ struct PDFDocumentView: UIViewRepresentable {
                     self.settleLayoutRestore(
                         restoredPageIndex,
                         in: pdfView,
+                        token: layoutRestoreToken,
                         transientChange: transientChange
                     )
                 }
@@ -347,10 +384,12 @@ struct PDFDocumentView: UIViewRepresentable {
         private func settleLayoutRestore(
             _ pageIndex: Int,
             in pdfView: PDFView,
+            token: UUID,
             transientChange: UUID,
             attemptsRemaining: Int = 2
         ) {
             guard layoutRestorePageIndex == pageIndex,
+                  layoutRestoreToken == token,
                   let document = pdfView.document,
                   let page = document.page(at: pageIndex) else {
                 endTransientPageChange(transientChange)
@@ -365,21 +404,24 @@ struct PDFDocumentView: UIViewRepresentable {
             DispatchQueue.main.async { [weak self, weak pdfView] in
                 guard let self, let pdfView,
                       self.layoutRestorePageIndex == pageIndex,
+                      self.layoutRestoreToken == token,
                       let document = pdfView.document else {
                     self?.endTransientPageChange(transientChange)
                     return
                 }
 
                 if pdfView.currentPage.map({ document.index(for: $0) }) == pageIndex {
-                    self.layoutRestorePageIndex = nil
-                    self.lastKnownPageIndex = pageIndex
-                    self.noteSettledBounds(of: pdfView)
-                    self.onPDFKitCurrentPageChanged(pageIndex)
-                    self.endTransientPageChange(transientChange)
+                    self.finishLayoutRestore(
+                        pageIndex,
+                        in: pdfView,
+                        token: token,
+                        transientChange: transientChange
+                    )
                 } else if attemptsRemaining > 0 {
                     self.settleLayoutRestore(
                         pageIndex,
                         in: pdfView,
+                        token: token,
                         transientChange: transientChange,
                         attemptsRemaining: attemptsRemaining - 1
                     )
@@ -388,12 +430,60 @@ struct PDFDocumentView: UIViewRepresentable {
                     // settled yet; a short protection window rejects any
                     // final synthetic page-zero notification.
                     self.layoutRestorePageIndex = nil
+                    self.layoutRestoreToken = nil
                     self.lastKnownPageIndex = pageIndex
                     self.protectedPageIndex = pageIndex
+                    self.rotationTrace("layout failed to settle target=\(pageIndex) current=\(pdfView.currentPage.map { document.index(for: $0) } ?? -1)")
                     self.endTransientPageChange(transientChange)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                         self?.protectedPageIndex = nil
                     }
+                }
+            }
+        }
+
+        /// PDFKit may report the requested page before its internal scroll
+        /// view completes the rotation. Reapply the destination after that
+        /// final scroll pass, while transient notifications remain ignored.
+        private func finishLayoutRestore(
+            _ pageIndex: Int,
+            in pdfView: PDFView,
+            token: UUID,
+            transientChange: UUID
+        ) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self, weak pdfView] in
+                guard let self,
+                      let pdfView,
+                      self.layoutRestorePageIndex == pageIndex,
+                      self.layoutRestoreToken == token,
+                      let document = pdfView.document,
+                      let page = document.page(at: pageIndex) else {
+                    self?.endTransientPageChange(transientChange)
+                    return
+                }
+                pdfView.go(to: page)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self, weak pdfView] in
+                    guard let self,
+                          let pdfView,
+                          self.layoutRestorePageIndex == pageIndex,
+                          self.layoutRestoreToken == token else {
+                        self?.endTransientPageChange(transientChange)
+                        return
+                    }
+                    self.layoutRestorePageIndex = nil
+                    self.layoutRestoreToken = nil
+                    self.lastKnownPageIndex = pageIndex
+                    self.noteSettledBounds(of: pdfView)
+                    self.firstSpreadProtection = (
+                        pageIndex: pageIndex,
+                        // PDFKit's final private scroll can be surprisingly
+                        // late. A real pan clears this immediately, so the
+                        // longer timeout does not interfere with reading.
+                        deadline: Date().addingTimeInterval(5)
+                    )
+                    self.onPDFKitCurrentPageChanged(pageIndex)
+                    self.rotationTrace("layout settled page=\(pageIndex) bounds=\(pdfView.bounds.integral)")
+                    self.endTransientPageChange(transientChange)
                 }
             }
         }
@@ -454,6 +544,7 @@ struct PDFDocumentView: UIViewRepresentable {
             }
             guard displayedRequestedPageRequestID != requestID else { return }
             displayedRequestedPageRequestID = requestID
+            rotationTrace("explicit request page=\(pageIndex) id=\(requestID?.uuidString ?? "nil")")
             // `PDFView.go(to:)` can synchronously publish a page change. Do
             // not let that callback mutate SwiftUI state during this
             // representable's update pass; it is the source of intermittent
@@ -474,6 +565,9 @@ struct PDFDocumentView: UIViewRepresentable {
                   let page = pdfView.currentPage else { return }
             let currentPageIndex = document.index(for: page)
             let previousPageIndex = lastKnownPageIndex
+            rotationTrace(
+                "page changed current=\(currentPageIndex) previous=\(previousPageIndex) bounds=\(pdfView.bounds.integral) transient=\(ignoresTransientPageChanges) layout=\(layoutRestorePageIndex.map(String.init) ?? "nil") protected=\(protectedPageIndex.map(String.init) ?? "nil")"
+            )
             hideSearchHighlight()
 
             // On rotation, PDFKit can announce page zero before SwiftUI has
@@ -482,7 +576,8 @@ struct PDFDocumentView: UIViewRepresentable {
             // rather than allowing it to overwrite `lastKnownPageIndex`.
             if currentPageIndex == 0,
                previousPageIndex > 0,
-               hasUnsettledBoundsChange(in: pdfView) {
+               (hasUnsettledBoundsChange(in: pdfView) || isOrientationTransitionInProgress) {
+                rotationTrace("ignored page zero during orientation/layout transition")
                 return
             }
 
@@ -503,6 +598,21 @@ struct PDFDocumentView: UIViewRepresentable {
                     page: protectedPage,
                     at: protectedPage.bounds(for: .mediaBox).origin
                 ))
+                return
+            }
+
+            // In two-up book mode, PDFKit can make one final private scroll
+            // to its first spread (reported as page zero or one) after the
+            // layout transaction has otherwise settled. It is neither a
+            // deliberate reader move nor a valid restored position.
+            if let firstSpreadProtection,
+               firstSpreadProtection.deadline > Date(),
+               firstSpreadProtection.pageIndex > 1,
+               currentPageIndex <= 1,
+               expectedNavigationPageIndex != currentPageIndex,
+               let protectedPage = document.page(at: firstSpreadProtection.pageIndex) {
+                rotationTrace("rejected late first-spread reset to \(currentPageIndex)")
+                pdfView.go(to: protectedPage)
                 return
             }
 
@@ -569,7 +679,22 @@ struct PDFDocumentView: UIViewRepresentable {
                 ?? lastKnownPageIndex
             lastKnownPageIndex = readingPageIndex
             noteSettledBounds(of: pdfView)
+            rotationTrace("published page=\(readingPageIndex) fallback=\(fallback.map(String.init) ?? "nil")")
             onPageChanged(readingPageIndex)
+        }
+
+        private func rotationTrace(_ message: String) {
+#if DEBUG
+            let entry = "[Downdraft rotation] \(message)"
+            print(entry)
+            let traceURL = FileManager.default.urls(
+                for: .cachesDirectory,
+                in: .userDomainMask
+            )[0].appendingPathComponent("DowndraftRotationTrace.txt")
+            let previous = (try? String(contentsOf: traceURL, encoding: .utf8)) ?? ""
+            let recent = String(previous.suffix(12_000))
+            try? (recent + entry + "\n").write(to: traceURL, atomically: true, encoding: .utf8)
+#endif
         }
 
         private func hasUnsettledBoundsChange(in pdfView: PDFView) -> Bool {
@@ -621,6 +746,7 @@ struct PDFDocumentView: UIViewRepresentable {
 
         @objc private func readerMotionBegan(_ recognizer: UIGestureRecognizer) {
             guard recognizer.state == .began || recognizer.state == .changed else { return }
+            firstSpreadProtection = nil
             pendingSearchHighlight = nil
             hideSearchHighlight()
         }
