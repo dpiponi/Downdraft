@@ -99,6 +99,7 @@ struct PDFDocumentView: UIViewRepresentable {
         private var firstSpreadProtection: (pageIndex: Int, deadline: Date)?
         private var lastSettledPDFViewBounds: CGRect?
         private var orientationTransitionDeadline: Date?
+        private var readerNavigationDeadline: Date?
         // PDFKit commonly exposes page zero while a newly assigned document
         // is still laying out. Never let that setup value replace a restored
         // reading position.
@@ -616,7 +617,7 @@ struct PDFDocumentView: UIViewRepresentable {
                 return
             }
 
-            let isExpectedNavigation = expectedNavigationPageIndex == currentPageIndex
+            var isExpectedNavigation = expectedNavigationPageIndex == currentPageIndex
             if isExpectedNavigation {
                 expectedNavigationPageIndex = nil
             }
@@ -627,6 +628,17 @@ struct PDFDocumentView: UIViewRepresentable {
                currentPageIndex == 0,
                previousPageIndex > 1 {
                 onJumpToFirstPage(previousPageIndex, currentPageIndex)
+                isExpectedNavigation = true
+            }
+
+            // PDFKit sends page-change notifications for some of its own
+            // deferred layout work. They are not evidence that the reader
+            // chose a new page, and must never overwrite shared progress.
+            // A page becomes progress only after a real scroll/pinch or an
+            // explicit navigation requested by the app.
+            guard isExpectedNavigation || isReaderNavigationInProgress(in: pdfView) else {
+                rotationTrace("ignored unsolicited page change to \(currentPageIndex)")
+                return
             }
 
             // PDFKit's `currentPage` is generally the page nearest the
@@ -703,6 +715,15 @@ struct PDFDocumentView: UIViewRepresentable {
                 || abs(lastSettledPDFViewBounds.height - pdfView.bounds.height) > 1
         }
 
+        private func isReaderNavigationInProgress(in pdfView: PDFView) -> Bool {
+            if let readerNavigationDeadline, readerNavigationDeadline > Date() {
+                return true
+            }
+            return scrollViews(in: pdfView).contains {
+                $0.isTracking || $0.isDragging || $0.isDecelerating
+            }
+        }
+
         private func noteSettledBounds(of pdfView: PDFView) {
             lastSettledPDFViewBounds = pdfView.bounds
         }
@@ -747,6 +768,7 @@ struct PDFDocumentView: UIViewRepresentable {
         @objc private func readerMotionBegan(_ recognizer: UIGestureRecognizer) {
             guard recognizer.state == .began || recognizer.state == .changed else { return }
             firstSpreadProtection = nil
+            readerNavigationDeadline = Date().addingTimeInterval(1)
             pendingSearchHighlight = nil
             hideSearchHighlight()
         }
