@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import PDFKit
+import UIKit
 
 /// Syncs the small, personal state associated with a PDF, rather than the
 /// PDF or Files permission itself.  Each field has its own timestamp, so a
@@ -23,6 +24,7 @@ enum ReadingStateStore {
             var index: Int
             var modifiedAt: Date
             var deviceID: String
+            var deviceName: String?
         }
 
         struct Bookmark: Codable, Equatable {
@@ -41,7 +43,12 @@ enum ReadingStateStore {
             // from another device merely because this app was opened later.
             let deviceID = ReadingStateStore.deviceID
             return State(
-                page: Page(index: pageIndex, modifiedAt: pageModifiedAt, deviceID: deviceID),
+                page: Page(
+                    index: pageIndex,
+                    modifiedAt: pageModifiedAt,
+                    deviceID: deviceID,
+                    deviceName: currentDeviceName
+                ),
                 bookmarks: bookmarks.map {
                     Bookmark(pageIndex: $0, modifiedAt: .distantPast, deviceID: deviceID)
                 }
@@ -119,7 +126,12 @@ enum ReadingStateStore {
             fallbackPageIndex: pageIndex,
             fallbackBookmarks: fallbackBookmarks
         )
-        state.page = .init(index: pageIndex, modifiedAt: Date(), deviceID: deviceID)
+        state.page = .init(
+            index: pageIndex,
+            modifiedAt: Date(),
+            deviceID: deviceID,
+            deviceName: currentDeviceName
+        )
         save(state, for: identity)
     }
 
@@ -150,6 +162,12 @@ enum ReadingStateStore {
         let value = UUID().uuidString
         defaults.set(value, forKey: deviceIDKey)
         return value
+    }
+
+    private static var currentDeviceName: String {
+        MainActor.assumeIsolated {
+            UIDevice.current.name
+        }
     }
 
     private static func save(_ state: State, for identity: String) {
@@ -258,21 +276,41 @@ enum DeviceReadingModeStore {
         var followsSharedPosition: Bool
         var detachedPageIndex: Int?
         var showsChapterMarks: Bool
+        var localPageIndex: Int?
+        var localPageModifiedAt: Date?
+        var handledSharedPageIndex: Int?
+        var handledSharedPageModifiedAt: Date?
+        var handledSharedDeviceID: String?
 
         init(
             followsSharedPosition: Bool,
             detachedPageIndex: Int?,
-            showsChapterMarks: Bool = true
+            showsChapterMarks: Bool = true,
+            localPageIndex: Int? = nil,
+            localPageModifiedAt: Date? = nil,
+            handledSharedPageIndex: Int? = nil,
+            handledSharedPageModifiedAt: Date? = nil,
+            handledSharedDeviceID: String? = nil
         ) {
             self.followsSharedPosition = followsSharedPosition
             self.detachedPageIndex = detachedPageIndex
             self.showsChapterMarks = showsChapterMarks
+            self.localPageIndex = localPageIndex
+            self.localPageModifiedAt = localPageModifiedAt
+            self.handledSharedPageIndex = handledSharedPageIndex
+            self.handledSharedPageModifiedAt = handledSharedPageModifiedAt
+            self.handledSharedDeviceID = handledSharedDeviceID
         }
 
         private enum CodingKeys: String, CodingKey {
             case followsSharedPosition
             case detachedPageIndex
             case showsChapterMarks
+            case localPageIndex
+            case localPageModifiedAt
+            case handledSharedPageIndex
+            case handledSharedPageModifiedAt
+            case handledSharedDeviceID
         }
 
         init(from decoder: Decoder) throws {
@@ -282,6 +320,14 @@ enum DeviceReadingModeStore {
             // Existing preferences predate this setting and should retain the
             // original, uncluttered-by-default behaviour of showing marks.
             showsChapterMarks = try values.decodeIfPresent(Bool.self, forKey: .showsChapterMarks) ?? true
+            // The old detached cursor was this device's only local position.
+            // Preserve it when upgrading to a local cursor for every mode.
+            localPageIndex = try values.decodeIfPresent(Int.self, forKey: .localPageIndex)
+                ?? detachedPageIndex
+            localPageModifiedAt = try values.decodeIfPresent(Date.self, forKey: .localPageModifiedAt)
+            handledSharedPageIndex = try values.decodeIfPresent(Int.self, forKey: .handledSharedPageIndex)
+            handledSharedPageModifiedAt = try values.decodeIfPresent(Date.self, forKey: .handledSharedPageModifiedAt)
+            handledSharedDeviceID = try values.decodeIfPresent(String.self, forKey: .handledSharedDeviceID)
         }
 
         static let linked = Preference(followsSharedPosition: true, detachedPageIndex: nil)
@@ -298,6 +344,8 @@ enum DeviceReadingModeStore {
         var preference = preference(for: identity)
         preference.followsSharedPosition = false
         preference.detachedPageIndex = pageIndex
+        preference.localPageIndex = pageIndex
+        preference.localPageModifiedAt = Date()
         save(preference, for: identity)
     }
 
@@ -305,6 +353,8 @@ enum DeviceReadingModeStore {
         var preference = preference(for: identity)
         guard !preference.followsSharedPosition else { return }
         preference.detachedPageIndex = pageIndex
+        preference.localPageIndex = pageIndex
+        preference.localPageModifiedAt = Date()
         save(preference, for: identity)
     }
 
@@ -313,6 +363,31 @@ enum DeviceReadingModeStore {
         preference.followsSharedPosition = true
         preference.detachedPageIndex = nil
         save(preference, for: identity)
+    }
+
+    static func updateLocalPage(_ pageIndex: Int, modifiedAt: Date, for identity: String) {
+        var preference = preference(for: identity)
+        preference.localPageIndex = pageIndex
+        preference.localPageModifiedAt = modifiedAt
+        if !preference.followsSharedPosition {
+            preference.detachedPageIndex = pageIndex
+        }
+        save(preference, for: identity)
+    }
+
+    static func markSharedPageHandled(_ page: ReadingStateStore.State.Page, for identity: String) {
+        var preference = preference(for: identity)
+        preference.handledSharedPageIndex = page.index
+        preference.handledSharedPageModifiedAt = page.modifiedAt
+        preference.handledSharedDeviceID = page.deviceID
+        save(preference, for: identity)
+    }
+
+    static func hasHandledSharedPage(_ page: ReadingStateStore.State.Page, for identity: String) -> Bool {
+        let preference = preference(for: identity)
+        return preference.handledSharedPageIndex == page.index
+            && preference.handledSharedPageModifiedAt == page.modifiedAt
+            && preference.handledSharedDeviceID == page.deviceID
     }
 
     static func setShowsChapterMarks(_ showsChapterMarks: Bool, for identity: String) {

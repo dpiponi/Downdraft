@@ -9,6 +9,20 @@ private struct BookmarkPreview {
     let pageIndex: Int
 }
 
+private struct ReadingPositionConflict: Identifiable {
+    let documentID: OpenDocument.ID
+    let localPageIndex: Int
+    let sharedPage: ReadingStateStore.State.Page
+
+    var id: String {
+        "\(documentID.uuidString)-\(sharedPage.deviceID)-\(sharedPage.modifiedAt.timeIntervalSinceReferenceDate)"
+    }
+
+    var deviceName: String {
+        sharedPage.deviceName?.isEmpty == false ? sharedPage.deviceName! : "Another device"
+    }
+}
+
 struct ContentView: View {
     @State private var documents = OpenDocument.restoreSavedDocuments()
     @State private var selectedDocumentID: OpenDocument.ID?
@@ -41,6 +55,7 @@ struct ContentView: View {
     @State private var bookmarkPreview: BookmarkPreview?
     @State private var followsSharedPosition = true
     @State private var showsChapterMarks = true
+    @State private var readingPositionConflict: ReadingPositionConflict?
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -463,6 +478,34 @@ struct ContentView: View {
                     .allowsHitTesting(false)
                     .transition(.opacity.combined(with: .scale(scale: 0.88)))
                     .zIndex(10)
+            }
+
+            if let conflict = readingPositionConflict,
+               conflict.documentID == selectedDocumentID {
+                VStack {
+                    Spacer(minLength: 0)
+                    HStack(spacing: 10) {
+                        Text("\(conflict.deviceName) · Page \(conflict.sharedPage.index + 1)")
+                            .font(.callout.weight(.medium))
+                            .lineLimit(1)
+                        Button("Go") {
+                            acceptSharedPosition(conflict)
+                        }
+                        .buttonStyle(.bordered)
+                        Button("Keep here") {
+                            keepLocalPosition(conflict)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .foregroundStyle(.white)
+                    .background(.black.opacity(0.72), in: Capsule())
+                    .padding(.bottom, isPhone ? 128 : 132)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .zIndex(8)
             }
 
             VStack(spacing: 0) {
@@ -903,8 +946,9 @@ struct ContentView: View {
         let readingPreference = document.readingStateIdentity.map(DeviceReadingModeStore.preference(for:)) ?? .linked
         followsSharedPosition = readingPreference.followsSharedPosition
         showsChapterMarks = readingPreference.showsChapterMarks
+        readingPositionConflict = nil
         if followsSharedPosition {
-            restoreSharedReadingState(for: document)
+            prepareLinkedReadingState(for: document)
         } else {
             refreshSharedBookmarks(for: document)
             if let detachedPageIndex = readingPreference.detachedPageIndex {
@@ -1008,6 +1052,7 @@ struct ContentView: View {
         if followsSharedPosition {
             DeviceReadingModeStore.detach(identity, at: document.lastPageIndex)
             followsSharedPosition = false
+            readingPositionConflict = nil
             saveDocuments()
             return
         }
@@ -1019,6 +1064,12 @@ struct ContentView: View {
         let localPageIndex = document.lastPageIndex
         let sharedPageIndex = validPageIndex(sharedState.page.index, in: document)
         DeviceReadingModeStore.link(identity)
+        DeviceReadingModeStore.updateLocalPage(
+            sharedPageIndex,
+            modifiedAt: sharedState.page.modifiedAt,
+            for: identity
+        )
+        DeviceReadingModeStore.markSharedPageHandled(sharedState.page, for: identity)
         followsSharedPosition = true
         document.lastPageIndex = sharedPageIndex
         document.lastPageModifiedAt = sharedState.page.modifiedAt
@@ -1146,6 +1197,16 @@ struct ContentView: View {
 #endif
         document.lastPageIndex = pageIndex
         document.lastPageModifiedAt = Date()
+        if let identity = document.readingStateIdentity {
+            DeviceReadingModeStore.updateLocalPage(
+                pageIndex,
+                modifiedAt: document.lastPageModifiedAt,
+                for: identity
+            )
+            if readingPositionConflict?.documentID == id {
+                keepLocalPosition(readingPositionConflict!)
+            }
+        }
         let documentFollowsSharedPosition = document.readingStateIdentity
             .map { DeviceReadingModeStore.preference(for: $0).followsSharedPosition }
             ?? true
@@ -1258,6 +1319,87 @@ struct ContentView: View {
         document.bookmarkPageIndices = OpenDocument.deduplicatedBookmarks(state.bookmarks.map(\.pageIndex))
     }
 
+    private func prepareLinkedReadingState(for document: OpenDocument) {
+        guard let identity = document.readingStateIdentity else { return }
+        var preference = DeviceReadingModeStore.preference(for: identity)
+        if preference.localPageIndex == nil,
+           document.lastPageModifiedAt != .distantPast {
+            DeviceReadingModeStore.updateLocalPage(
+                document.lastPageIndex,
+                modifiedAt: document.lastPageModifiedAt,
+                for: identity
+            )
+            preference = DeviceReadingModeStore.preference(for: identity)
+        }
+
+        let state = sharedReadingState(for: document, usesDocumentFallback: false)
+        document.bookmarkPageIndices = OpenDocument.deduplicatedBookmarks(state.bookmarks.map(\.pageIndex))
+        let sharedPageIndex = validPageIndex(state.page.index, in: document)
+        let localPageIndex = preference.localPageIndex.map { validPageIndex($0, in: document) }
+        let hasRemotePosition = state.page.modifiedAt != .distantPast
+        let hasHandledRemote = DeviceReadingModeStore.hasHandledSharedPage(state.page, for: identity)
+
+        if let localPageIndex,
+           hasRemotePosition,
+           localPageIndex != sharedPageIndex {
+            document.lastPageIndex = localPageIndex
+            document.lastPageModifiedAt = preference.localPageModifiedAt ?? document.lastPageModifiedAt
+            if !hasHandledRemote {
+                readingPositionConflict = ReadingPositionConflict(
+                    documentID: document.id,
+                    localPageIndex: localPageIndex,
+                    sharedPage: state.page
+                )
+            }
+            return
+        }
+
+        if hasRemotePosition {
+            document.lastPageIndex = sharedPageIndex
+            document.lastPageModifiedAt = state.page.modifiedAt
+            DeviceReadingModeStore.updateLocalPage(
+                sharedPageIndex,
+                modifiedAt: state.page.modifiedAt,
+                for: identity
+            )
+            DeviceReadingModeStore.markSharedPageHandled(state.page, for: identity)
+        }
+    }
+
+    private func acceptSharedPosition(_ conflict: ReadingPositionConflict) {
+        guard let document = selectedDocument,
+              document.id == conflict.documentID,
+              let identity = document.readingStateIdentity else { return }
+        let destination = validPageIndex(conflict.sharedPage.index, in: document)
+        let source = document.lastPageIndex
+        document.lastPageIndex = destination
+        document.lastPageModifiedAt = conflict.sharedPage.modifiedAt
+        DeviceReadingModeStore.updateLocalPage(
+            destination,
+            modifiedAt: conflict.sharedPage.modifiedAt,
+            for: identity
+        )
+        DeviceReadingModeStore.markSharedPageHandled(conflict.sharedPage, for: identity)
+        readingPositionConflict = nil
+        if destination != source {
+            recordNavigation(in: document, from: source, to: destination)
+            scrubbedPageIndex = destination
+            pdfKitCurrentPageIndex = destination
+            scrubberRevision += 1
+            requestPage(destination)
+        }
+        saveDocuments()
+    }
+
+    private func keepLocalPosition(_ conflict: ReadingPositionConflict) {
+        guard let document = selectedDocument,
+              document.id == conflict.documentID,
+              let identity = document.readingStateIdentity else { return }
+        DeviceReadingModeStore.markSharedPageHandled(conflict.sharedPage, for: identity)
+        readingPositionConflict = nil
+        saveDocuments()
+    }
+
     private func refreshSharedBookmarks(for document: OpenDocument) {
         let state = sharedReadingState(for: document, usesDocumentFallback: false)
         document.bookmarkPageIndices = OpenDocument.deduplicatedBookmarks(state.bookmarks.map(\.pageIndex))
@@ -1294,16 +1436,13 @@ struct ContentView: View {
             saveDocuments()
             return
         }
-        document.lastPageIndex = state.page.index
-        document.lastPageModifiedAt = state.page.modifiedAt
-        if state.page.index != previousPage {
-            scrubbedPageIndex = state.page.index
-            scrubberRevision += 1
-            requestPage(state.page.index)
-            RecentDocumentStore.updateReadingPosition(
-                bookmarkData: document.bookmarkData,
-                pageIndex: state.page.index,
-                pageCount: document.pdfDocument?.pageCount
+        let sharedPageIndex = validPageIndex(state.page.index, in: document)
+        if sharedPageIndex != previousPage,
+           !DeviceReadingModeStore.hasHandledSharedPage(state.page, for: identity) {
+            readingPositionConflict = ReadingPositionConflict(
+                documentID: document.id,
+                localPageIndex: previousPage,
+                sharedPage: state.page
             )
         }
         saveDocuments()

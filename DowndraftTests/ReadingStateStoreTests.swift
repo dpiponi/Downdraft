@@ -84,23 +84,26 @@ final class ReadingStateStoreTests: XCTestCase {
         XCTAssertEqual(ReadingStateStore.merged(cloud, fallback).page.index, 47)
     }
 
-    func testDetachedPositionIsLocalAndClearedWhenRelinking() {
+    func testDetachedPositionRemainsAvailableAsLocalPositionWhenRelinking() {
         let identity = "test-local-position-\(UUID().uuidString)"
         defer { DeviceReadingModeStore.removePreference(for: identity) }
 
         XCTAssertEqual(DeviceReadingModeStore.preference(for: identity), .linked)
 
         DeviceReadingModeStore.detach(identity, at: 12)
-        XCTAssertEqual(
-            DeviceReadingModeStore.preference(for: identity),
-            .init(followsSharedPosition: false, detachedPageIndex: 12)
-        )
+        let detachedPreference = DeviceReadingModeStore.preference(for: identity)
+        XCTAssertFalse(detachedPreference.followsSharedPosition)
+        XCTAssertEqual(detachedPreference.detachedPageIndex, 12)
+        XCTAssertEqual(detachedPreference.localPageIndex, 12)
 
         DeviceReadingModeStore.updateDetachedPage(19, for: identity)
         XCTAssertEqual(DeviceReadingModeStore.preference(for: identity).detachedPageIndex, 19)
 
         DeviceReadingModeStore.link(identity)
-        XCTAssertEqual(DeviceReadingModeStore.preference(for: identity), .linked)
+        let linkedPreference = DeviceReadingModeStore.preference(for: identity)
+        XCTAssertTrue(linkedPreference.followsSharedPosition)
+        XCTAssertNil(linkedPreference.detachedPageIndex)
+        XCTAssertEqual(linkedPreference.localPageIndex, 19)
     }
 
     func testExistingDevicePreferenceDefaultsToShowingChapterMarks() throws {
@@ -109,6 +112,27 @@ final class ReadingStateStoreTests: XCTestCase {
 
         XCTAssertFalse(preference.followsSharedPosition)
         XCTAssertEqual(preference.detachedPageIndex, 8)
+        XCTAssertEqual(preference.localPageIndex, 8)
         XCTAssertTrue(preference.showsChapterMarks)
+    }
+
+    func testHandledSharedPageUsesTheFullRevision() {
+        let identity = "test-handled-shared-page-\(UUID().uuidString)"
+        defer { DeviceReadingModeStore.removePreference(for: identity) }
+        let timestamp = Date(timeIntervalSinceReferenceDate: 123)
+        let page = ReadingStateStore.State.Page(
+            index: 42,
+            modifiedAt: timestamp,
+            deviceID: "beskar",
+            deviceName: "Beskar"
+        )
+
+        XCTAssertFalse(DeviceReadingModeStore.hasHandledSharedPage(page, for: identity))
+        DeviceReadingModeStore.markSharedPageHandled(page, for: identity)
+        XCTAssertTrue(DeviceReadingModeStore.hasHandledSharedPage(page, for: identity))
+
+        var newerRevision = page
+        newerRevision.modifiedAt = timestamp.addingTimeInterval(1)
+        XCTAssertFalse(DeviceReadingModeStore.hasHandledSharedPage(newerRevision, for: identity))
     }
 }
