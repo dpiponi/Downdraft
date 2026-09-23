@@ -104,6 +104,7 @@ struct PDFDocumentView: UIViewRepresentable {
         // is still laying out. Never let that setup value replace a restored
         // reading position.
         private var initialRestorePageIndex: Int?
+        private var initialPageProtection: (pageIndex: Int, deadline: Date)?
         private var expectedNavigationPageIndex: Int?
         private var transientPageChangeTokens = Set<UUID>()
         var lastKnownPageIndex = 0
@@ -140,6 +141,7 @@ struct PDFDocumentView: UIViewRepresentable {
             let restoredPageIndex = validPageIndex(pageIndex, in: document) ?? 0
             lastKnownPageIndex = restoredPageIndex
             initialRestorePageIndex = restoredPageIndex
+            initialPageProtection = nil
             lastSettledPDFViewBounds = pdfView.bounds
             pdfView.document = document
             if let page = document.page(at: restoredPageIndex) {
@@ -192,6 +194,14 @@ struct PDFDocumentView: UIViewRepresentable {
                     self.initialRestorePageIndex = nil
                     self.lastKnownPageIndex = pageIndex
                     self.noteSettledBounds(of: pdfView)
+                    // PDFKit can report its first page one more time after a
+                    // successful initial restoration, while it is still
+                    // arranging its private scroll views. It is never a
+                    // reader decision, even if its pan recognizer fires.
+                    self.initialPageProtection = (
+                        pageIndex: pageIndex,
+                        deadline: Date().addingTimeInterval(2)
+                    )
                     self.onPDFKitCurrentPageChanged(pageIndex)
                     self.endTransientPageChange(transientChange)
                 } else if attemptsRemaining > 0 {
@@ -586,6 +596,15 @@ struct PDFDocumentView: UIViewRepresentable {
             // scroll view for an otherwise non-navigational resize.  Keep the
             // reading position authoritative until that rebuild is complete.
             if ignoresTransientPageChanges {
+                return
+            }
+
+            if let initialPageProtection,
+               initialPageProtection.deadline > Date(),
+               currentPageIndex != initialPageProtection.pageIndex,
+               let protectedPage = document.page(at: initialPageProtection.pageIndex) {
+                rotationTrace("rejected startup reset to \(currentPageIndex)")
+                pdfView.go(to: protectedPage)
                 return
             }
 
