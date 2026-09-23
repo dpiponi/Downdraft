@@ -390,6 +390,16 @@ enum DeviceReadingModeStore {
             && preference.handledSharedDeviceID == page.deviceID
     }
 
+    static func handledSharedPage(for identity: String) -> ReadingStateStore.State.Page? {
+        let preference = preference(for: identity)
+        guard let pageIndex = preference.handledSharedPageIndex,
+              let modifiedAt = preference.handledSharedPageModifiedAt,
+              let deviceID = preference.handledSharedDeviceID else {
+            return nil
+        }
+        return .init(index: pageIndex, modifiedAt: modifiedAt, deviceID: deviceID, deviceName: nil)
+    }
+
     static func setShowsChapterMarks(_ showsChapterMarks: Bool, for identity: String) {
         var preference = preference(for: identity)
         preference.showsChapterMarks = showsChapterMarks

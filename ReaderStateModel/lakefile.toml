@@ -1,0 +1,6 @@
+name = "downdraftReaderState"
+version = "0.1.0"
+defaultTargets = ["ReaderStateModel"]
+
+[[lean_lib]]
+name = "ReaderStateModel"
