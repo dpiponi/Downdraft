@@ -44,10 +44,18 @@ private struct ReaderChromeLayout {
 
     var scrubberBottomInset: CGFloat {
         guard isPhone, isLandscape else { return isPhone ? 36 : 42 }
-        return max(56, safeArea.bottom + 24)
+        // In compact landscape, the Home indicator needs clearance but not
+        // the large portrait reservation that originally pushed the slider
+        // visibly up the page.
+        return max(28, safeArea.bottom + 12)
     }
 
     var bookmarkBottomInset: CGFloat {
+        if isPhone, isLandscape {
+            // Keep the add control just above the lower chrome. The rail
+            // grows upwards only when there are enough bookmarks to need it.
+            return max(96, scrubberBottomInset + 72)
+        }
         let baseline: CGFloat = isPhone ? 176 : 144
         return max(baseline, scrubberBottomInset + 132)
     }
@@ -55,6 +63,17 @@ private struct ReaderChromeLayout {
     var bookmarkTopClearance: CGFloat {
         if isPhone { return isLandscape ? 108 : 180 }
         return 140
+    }
+
+    var scrubberMaximumWidth: CGFloat {
+        isPhone && isLandscape ? 620 : (isPhone ? 320 : 680)
+    }
+
+    var bookmarkPreviewBottomInset: CGFloat {
+        if isPhone, isLandscape {
+            return bookmarkBottomInset
+        }
+        return isPhone ? 168 : 130
     }
 }
 
@@ -512,7 +531,7 @@ struct ContentView: View {
                     .shadow(color: .black.opacity(0.65), radius: 18, y: 8)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .padding(.trailing, max(isPhone ? 90 : 100, layout.horizontalTrailing + 62))
-                    .padding(.bottom, max(isPhone ? 168 : 130, layout.bookmarkBottomInset - 8))
+                    .padding(.bottom, max(layout.bookmarkPreviewBottomInset, layout.bookmarkBottomInset - 8))
                     .allowsHitTesting(false)
                     .transition(.opacity.combined(with: .scale(scale: 0.88)))
                     .zIndex(10)
@@ -553,7 +572,7 @@ struct ContentView: View {
                         .padding(.top, 6)
                         .padding(.bottom, isPhone ? 14 : 10)
                 }
-                .frame(maxWidth: isPhone ? 320 : 680)
+                .frame(maxWidth: layout.scrubberMaximumWidth)
                 .frame(maxWidth: .infinity)
                 .padding(.leading, layout.horizontalLeading)
                 .padding(.trailing, layout.horizontalTrailing)
