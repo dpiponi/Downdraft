@@ -526,11 +526,17 @@ struct ContentView: View {
                 Spacer(minLength: 0)
                 HStack {
                     if layout.bookmarksUseLeadingEdge {
-                        bookmarkControls(visibleLimit: visibleBookmarkLimit(for: geometry.size.height, layout: layout))
+                        bookmarkControls(
+                            visibleLimit: visibleBookmarkLimit(for: geometry.size.height, layout: layout),
+                            attachedToLeadingEdge: true
+                        )
                         Spacer(minLength: 0)
                     } else {
                         Spacer(minLength: 0)
-                        bookmarkControls(visibleLimit: visibleBookmarkLimit(for: geometry.size.height, layout: layout))
+                        bookmarkControls(
+                            visibleLimit: visibleBookmarkLimit(for: geometry.size.height, layout: layout),
+                            attachedToLeadingEdge: false
+                        )
                     }
                 }
                 // The stack grows upward while the add control stays on the
@@ -775,7 +781,7 @@ struct ContentView: View {
             }
     }
 
-    private func bookmarkControls(visibleLimit: Int) -> some View {
+    private func bookmarkControls(visibleLimit: Int, attachedToLeadingEdge: Bool) -> some View {
         VStack(spacing: 8) {
             ForEach(Array(visibleBookmarks.prefix(visibleLimit)), id: \.index) { bookmark in
                 BookmarkSlotButton(
@@ -829,7 +835,14 @@ struct ContentView: View {
             .frame(width: 40, height: 40)
         }
         .padding(8)
-        .background(.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        // Extend the attached end beyond the display boundary. Its corner
+        // then curves out of sight, so the visible rail joins the screen edge
+        // without the sharp, inward-pointing corner of a normal rectangle.
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.black.opacity(0.62))
+                .padding(attachedToLeadingEdge ? .leading : .trailing, -12)
+        }
         .tint(.white)
         .foregroundStyle(.white)
         .font(.title3.weight(.medium))
