@@ -1410,9 +1410,10 @@ struct ContentView: View {
     /// if PDFKit delays its page-change callback.
     private func explicitlyNavigate(to pageIndex: Int) {
         guard let document = selectedDocument else { return }
+        let currentPageIndex = confirmedCurrentPageIndex(for: document)
         let state = ReaderPositionState(
-            confirmedPage: document.lastPageIndex,
-            localPage: document.lastPageIndex,
+            confirmedPage: currentPageIndex,
+            localPage: currentPageIndex,
             linked: followsSharedPosition,
             startupProtected: false,
             pendingShared: nil,
@@ -1442,7 +1443,7 @@ struct ContentView: View {
     }
 
     private func navigateBack(in document: OpenDocument) {
-        guard let pageIndex = document.navigateBack(from: document.lastPageIndex) else { return }
+        guard let pageIndex = document.navigateBack(from: confirmedCurrentPageIndex(for: document)) else { return }
         navigationRevision += 1
         scrubbedPageIndex = pageIndex
         scrubberRevision += 1
@@ -1450,11 +1451,23 @@ struct ContentView: View {
     }
 
     private func navigateForward(in document: OpenDocument) {
-        guard let pageIndex = document.navigateForward(from: document.lastPageIndex) else { return }
+        guard let pageIndex = document.navigateForward(from: confirmedCurrentPageIndex(for: document)) else { return }
         navigationRevision += 1
         scrubbedPageIndex = pageIndex
         scrubberRevision += 1
         requestPage(pageIndex)
+    }
+
+    /// PDFKit identifies its actual current page before its visible-page
+    /// heuristic has settled. For history operations that confirmed value is
+    /// the correct source; the persisted reading page can be one callback
+    /// behind immediately after a search jump.
+    private func confirmedCurrentPageIndex(for document: OpenDocument) -> Int {
+        guard document.id == selectedDocumentID,
+              let pdfKitCurrentPageIndex else {
+            return document.lastPageIndex
+        }
+        return validPageIndex(pdfKitCurrentPageIndex, in: document)
     }
 
     private func saveDocuments() {
