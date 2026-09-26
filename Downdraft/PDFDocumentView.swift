@@ -565,6 +565,13 @@ struct PDFDocumentView: UIViewRepresentable {
             guard displayedRequestedPageRequestID != requestID else { return }
             displayedRequestedPageRequestID = requestID
             rotationTrace("explicit request page=\(pageIndex) id=\(requestID?.uuidString ?? "nil")")
+            // A deliberate jump (including Back after a search) supersedes
+            // startup's first-spread protection. Otherwise a request back to
+            // page zero or one can be mistaken for PDFKit's synthetic reset
+            // and remain blocked until that five-second window expires.
+            firstSpreadProtection = nil
+            protectedPageIndex = nil
+            expectNavigation(to: pageIndex)
             // `PDFView.go(to:)` can synchronously publish a page change. Do
             // not let that callback mutate SwiftUI state during this
             // representable's update pass; it is the source of intermittent
@@ -574,7 +581,6 @@ struct PDFDocumentView: UIViewRepresentable {
                       self.displayedRequestedPageRequestID == requestID,
                       let pdfView,
                       let page = pdfView.document?.page(at: pageIndex) else { return }
-                self.expectNavigation(to: pageIndex)
                 pdfView.go(to: page)
             }
         }
