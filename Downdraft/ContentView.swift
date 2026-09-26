@@ -65,6 +65,17 @@ private struct ReaderChromeLayout {
         return 140
     }
 
+    /// The rail can use the screen edge now that PDFKit's duplicate scrollbar
+    /// is hidden. A large trailing inset is the landscape camera island, so
+    /// put the rail on the unobstructed edge instead.
+    var bookmarksUseLeadingEdge: Bool {
+        isPhone && isLandscape && safeArea.trailing > 24
+    }
+
+    var bookmarkEdgeInset: CGFloat {
+        bookmarksUseLeadingEdge ? safeArea.leading : safeArea.trailing
+    }
+
     var scrubberMaximumWidth: CGFloat {
         isPhone && isLandscape ? 620 : (isPhone ? 320 : 680)
     }
@@ -514,12 +525,17 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
                 HStack {
-                    Spacer(minLength: 0)
-                    bookmarkControls(visibleLimit: visibleBookmarkLimit(for: geometry.size.height, layout: layout))
+                    if layout.bookmarksUseLeadingEdge {
+                        bookmarkControls(visibleLimit: visibleBookmarkLimit(for: geometry.size.height, layout: layout))
+                        Spacer(minLength: 0)
+                    } else {
+                        Spacer(minLength: 0)
+                        bookmarkControls(visibleLimit: visibleBookmarkLimit(for: geometry.size.height, layout: layout))
+                    }
                 }
-                // Match the scrubber capsule's trailing edge. The stack
-                // grows upward while the add control stays put.
-                .padding(.trailing, layout.horizontalTrailing)
+                // The stack grows upward while the add control stays on the
+                // unobstructed physical screen edge.
+                .padding(layout.bookmarksUseLeadingEdge ? .leading : .trailing, layout.bookmarkEdgeInset)
             }
             .padding(.bottom, layout.bookmarkBottomInset)
             .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -540,8 +556,15 @@ struct ContentView: View {
                             .padding(.bottom, 12)
                     }
                     .shadow(color: .black.opacity(0.65), radius: 18, y: 8)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                    .padding(.trailing, max(isPhone ? 90 : 100, layout.horizontalTrailing + 62))
+                    .frame(
+                        maxWidth: .infinity,
+                        maxHeight: .infinity,
+                        alignment: layout.bookmarksUseLeadingEdge ? .bottomLeading : .bottomTrailing
+                    )
+                    .padding(
+                        layout.bookmarksUseLeadingEdge ? .leading : .trailing,
+                        max(isPhone ? 90 : 100, layout.bookmarkEdgeInset + 62)
+                    )
                     .padding(.bottom, max(layout.bookmarkPreviewBottomInset, layout.bookmarkBottomInset - 8))
                     .allowsHitTesting(false)
                     .transition(.opacity.combined(with: .scale(scale: 0.88)))
