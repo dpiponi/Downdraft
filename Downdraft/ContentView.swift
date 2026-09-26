@@ -625,9 +625,9 @@ struct ContentView: View {
         guard isPhone, layout.isLandscape, isSearchPresented else { return false }
 
         // There are about 300 points of fixed document, reader, and history
-        // controls. Keep at least 220 for entering a query; match navigation
-        // controls add roughly another 100 once search has results.
-        let requiredWidth: CGFloat = searchResults.isEmpty ? 720 : 820
+        // controls. A 680-point usable row still leaves a workable query
+        // field beside the match-navigation controls on current iPhones.
+        let requiredWidth: CGFloat = 680
         let usableWidth = geometry.size.width - layout.horizontalLeading - layout.horizontalTrailing
         return usableWidth >= requiredWidth
     }
