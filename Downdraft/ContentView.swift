@@ -472,14 +472,22 @@ struct ContentView: View {
                             documentMenu
                                 .frame(width: 48, height: 48)
                                 .background(.black.opacity(0.001), in: Circle())
+                                .zIndex(2)
 
                             topReaderControls
+                                // On a compact phone, a long active search
+                                // row must yield before it can overlap and
+                                // steal taps from Back/Forward.
+                                .layoutPriority(1)
+                                .zIndex(2)
 
                             Spacer(minLength: 0)
 
                             if isSearchPresented, searchIsInline {
                                 searchControls
                                     .frame(minWidth: 220, maxWidth: 360)
+                                    .layoutPriority(0)
+                                    .zIndex(1)
                                     .onAppear {
                                         isSearchFieldFocused = true
                                     }
@@ -669,6 +677,10 @@ struct ContentView: View {
             if isPhone {
                 historyControls
                     .frame(height: 58)
+                    // Keep the history targets generously sized without
+                    // adding a second visible control treatment.
+                    .padding(.horizontal, 3)
+                    .contentShape(Capsule())
             } else {
                 historyControls
                     .padding(.horizontal, 16)
@@ -943,7 +955,7 @@ struct ContentView: View {
     }
 
     private var historyControls: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: isPhone ? 6 : 10) {
             if let document = selectedDocument {
                 Button {
                     guard document.canNavigateBack else { return }
@@ -951,7 +963,7 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "chevron.backward")
                         .font(.title3.weight(.medium))
-                        .frame(width: 40, height: 40)
+                        .frame(width: isPhone ? 44 : 40, height: 44)
                 }
                 .accessibilityLabel("Back")
                 .buttonStyle(.plain)
@@ -962,7 +974,7 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "chevron.forward")
                         .font(.title3.weight(.medium))
-                        .frame(width: 40, height: 40)
+                        .frame(width: isPhone ? 44 : 40, height: 44)
                 }
                 .accessibilityLabel("Forward")
                 .buttonStyle(.plain)
@@ -1443,7 +1455,8 @@ struct ContentView: View {
     }
 
     private func navigateBack(in document: OpenDocument) {
-        guard let pageIndex = document.navigateBack(from: confirmedCurrentPageIndex(for: document)) else { return }
+        let currentPageIndex = confirmedCurrentPageIndex(for: document)
+        guard let pageIndex = document.navigateBack(from: currentPageIndex) else { return }
         navigationRevision += 1
         scrubbedPageIndex = pageIndex
         scrubberRevision += 1
@@ -1451,7 +1464,8 @@ struct ContentView: View {
     }
 
     private func navigateForward(in document: OpenDocument) {
-        guard let pageIndex = document.navigateForward(from: confirmedCurrentPageIndex(for: document)) else { return }
+        let currentPageIndex = confirmedCurrentPageIndex(for: document)
+        guard let pageIndex = document.navigateForward(from: currentPageIndex) else { return }
         navigationRevision += 1
         scrubbedPageIndex = pageIndex
         scrubberRevision += 1
