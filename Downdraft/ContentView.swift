@@ -1376,8 +1376,13 @@ struct ContentView: View {
         if id == selectedDocumentID {
             document.lastSelectedAt = Date()
             scrubbedPageIndex = pageIndex
-            requestedPageIndex = nil
-            requestedPageRequestID = nil
+            // A late notification for the page we just left (common after a
+            // search selection) must not cancel a newer Back/Forward request.
+            // Only the requested destination is allowed to acknowledge it.
+            if requestedPageIndex == pageIndex {
+                requestedPageIndex = nil
+                requestedPageRequestID = nil
+            }
         }
         saveDocuments()
     }
