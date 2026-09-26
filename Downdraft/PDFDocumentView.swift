@@ -25,6 +25,7 @@ struct PDFDocumentView: UIViewRepresentable {
         view.autoScales = true
         view.displayDirection = .vertical
         view.displayMode = .singlePageContinuous
+        context.coordinator.hidePDFKitScrollIndicators(in: view)
         context.coordinator.startObservingPageChanges(in: view)
         context.coordinator.startObservingOrientationChanges()
         context.coordinator.startObservingSelectionChanges(in: view)
@@ -42,6 +43,7 @@ struct PDFDocumentView: UIViewRepresentable {
         context.coordinator.onLinkNavigation = onLinkNavigation
         context.coordinator.disableDoubleTapZoom(in: pdfView)
         context.coordinator.disablePDFKitSingleTaps(in: pdfView)
+        context.coordinator.hidePDFKitScrollIndicators(in: pdfView)
         if context.coordinator.loadedDocument !== document {
             context.coordinator.install(
                 document,
@@ -321,6 +323,13 @@ struct PDFDocumentView: UIViewRepresentable {
         private func scrollViews(in view: UIView) -> [UIScrollView] {
             let local = view.subviews.compactMap { $0 as? UIScrollView }
             return local + view.subviews.flatMap(scrollViews(in:))
+        }
+
+        func hidePDFKitScrollIndicators(in pdfView: PDFView) {
+            for scrollView in scrollViews(in: pdfView) {
+                scrollView.showsVerticalScrollIndicator = false
+                scrollView.showsHorizontalScrollIndicator = false
+            }
         }
 
         func updateReaderFocus(_ isFocused: Bool) {

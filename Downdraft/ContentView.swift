@@ -23,6 +23,41 @@ private struct ReadingPositionConflict: Identifiable {
     }
 }
 
+private struct ReaderChromeLayout {
+    let isPhone: Bool
+    let isLandscape: Bool
+    let safeArea: EdgeInsets
+
+    var horizontalLeading: CGFloat { max(28, safeArea.leading + 16) }
+    var horizontalTrailing: CGFloat { max(28, safeArea.trailing + 16) }
+
+    var topPadding: CGFloat {
+        if isPhone {
+            return isLandscape ? max(16, safeArea.top + 10) : 56
+        }
+        return max(42, safeArea.top + 12)
+    }
+
+    var topHitAreaHeight: CGFloat {
+        isPhone ? (isLandscape ? 92 : 180) : 140
+    }
+
+    var scrubberBottomInset: CGFloat {
+        guard isPhone, isLandscape else { return isPhone ? 36 : 42 }
+        return max(56, safeArea.bottom + 24)
+    }
+
+    var bookmarkBottomInset: CGFloat {
+        let baseline: CGFloat = isPhone ? 176 : 144
+        return max(baseline, scrubberBottomInset + 132)
+    }
+
+    var bookmarkTopClearance: CGFloat {
+        if isPhone { return isLandscape ? 108 : 180 }
+        return 140
+    }
+}
+
 struct ContentView: View {
     @State private var documents = OpenDocument.restoreSavedDocuments()
     @State private var selectedDocumentID: OpenDocument.ID?
@@ -112,9 +147,9 @@ struct ContentView: View {
     /// Calculates the thumbnail count from the actual reader height. The rail
     /// grows upward from the fixed add button, but must never intrude into the
     /// top controls (including the optional search row).
-    private func visibleBookmarkLimit(for readerHeight: CGFloat) -> Int {
-        let topControlsClearance: CGFloat = isPhone ? 180 : 140
-        let railBottomInset: CGFloat = isPhone ? 176 : 144
+    private func visibleBookmarkLimit(for readerHeight: CGFloat, layout: ReaderChromeLayout) -> Int {
+        let topControlsClearance = layout.bookmarkTopClearance
+        let railBottomInset = layout.bookmarkBottomInset
         let railVerticalPadding: CGFloat = 16
         let thumbnailHeight: CGFloat = 62
         let addButtonHeight: CGFloat = 40
@@ -369,21 +404,23 @@ struct ContentView: View {
     /// navigation or bottom toolbar.  They can animate independently without
     /// changing PDFKit's frame or safe area.
     private func readerChrome(for document: PDFDocument) -> some View {
-        ZStack {
+        GeometryReader { geometry in
+            let layout = readerChromeLayout(for: geometry)
+            ZStack {
             VStack(spacing: 0) {
                 LinearGradient(
                     colors: [.black.opacity(0.78), .black.opacity(0)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: isPhone ? 210 : 180)
+                .frame(height: isPhone ? (layout.isLandscape ? 130 : 210) : 180)
                 Spacer(minLength: 0)
                 LinearGradient(
                     colors: [.black.opacity(0), .black.opacity(0.78)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: isPhone ? 260 : 200)
+                .frame(height: isPhone ? (layout.isLandscape ? 170 : 260) : 200)
             }
             .allowsHitTesting(false)
 
@@ -392,7 +429,7 @@ struct ContentView: View {
                 // point within it is UI space and must not fall through to
                 // the gesture-heavy PDFView underneath.
                 Color.black.opacity(0.001)
-                    .frame(height: isPhone ? 180 : 140)
+                    .frame(height: layout.topHitAreaHeight)
                     .contentShape(Rectangle())
                     .onTapGesture { }
 
@@ -407,13 +444,15 @@ struct ContentView: View {
 
                             Spacer(minLength: 0)
                         }
-                        .padding(.horizontal, 28)
-                        .padding(.top, 56)
+                        .padding(.leading, layout.horizontalLeading)
+                        .padding(.trailing, layout.horizontalTrailing)
+                        .padding(.top, layout.topPadding)
 
                         if isSearchPresented {
                             searchControls
                                 .frame(maxWidth: .infinity)
-                                .padding(.horizontal, 28)
+                                .padding(.leading, layout.horizontalLeading)
+                                .padding(.trailing, layout.horizontalTrailing)
                                 .padding(.top, 6)
                                 .onAppear {
                                     isSearchFieldFocused = true
@@ -432,8 +471,9 @@ struct ContentView: View {
                             searchControls
                                 .frame(maxWidth: 440)
                         }
-                        .padding(.horizontal, 28)
-                        .padding(.top, 42)
+                        .padding(.leading, layout.horizontalLeading)
+                        .padding(.trailing, layout.horizontalTrailing)
+                        .padding(.top, layout.topPadding)
                     }
                     Spacer(minLength: 0)
                 }
@@ -441,19 +481,17 @@ struct ContentView: View {
             }
             .transition(.move(edge: .top).combined(with: .opacity))
 
-            GeometryReader { geometry in
-                VStack(spacing: 0) {
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                HStack {
                     Spacer(minLength: 0)
-                    HStack {
-                        Spacer(minLength: 0)
-                        bookmarkControls(visibleLimit: visibleBookmarkLimit(for: geometry.size.height))
-                    }
-                    // Match the scrubber capsule's trailing edge.  The
-                    // stack grows upward while the add control stays put.
-                    .padding(.trailing, 28)
+                    bookmarkControls(visibleLimit: visibleBookmarkLimit(for: geometry.size.height, layout: layout))
                 }
-                .padding(.bottom, isPhone ? 176 : 144)
+                // Match the scrubber capsule's trailing edge. The stack
+                // grows upward while the add control stays put.
+                .padding(.trailing, layout.horizontalTrailing)
             }
+            .padding(.bottom, layout.bookmarkBottomInset)
             .transition(.move(edge: .trailing).combined(with: .opacity))
 
             if let bookmarkPreview {
@@ -473,8 +511,8 @@ struct ContentView: View {
                     }
                     .shadow(color: .black.opacity(0.65), radius: 18, y: 8)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                    .padding(.trailing, isPhone ? 90 : 100)
-                    .padding(.bottom, isPhone ? 168 : 130)
+                    .padding(.trailing, max(isPhone ? 90 : 100, layout.horizontalTrailing + 62))
+                    .padding(.bottom, max(isPhone ? 168 : 130, layout.bookmarkBottomInset - 8))
                     .allowsHitTesting(false)
                     .transition(.opacity.combined(with: .scale(scale: 0.88)))
                     .zIndex(10)
@@ -501,7 +539,7 @@ struct ContentView: View {
                     .padding(.vertical, 10)
                     .foregroundStyle(.white)
                     .background(.black.opacity(0.72), in: Capsule())
-                    .padding(.bottom, isPhone ? 128 : 132)
+                    .padding(.bottom, layout.scrubberBottomInset + (isPhone ? 92 : 90))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -517,8 +555,9 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: isPhone ? 320 : 680)
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 28)
-                .padding(.bottom, isPhone ? 36 : 42)
+                .padding(.leading, layout.horizontalLeading)
+                .padding(.trailing, layout.horizontalTrailing)
+                .padding(.bottom, layout.scrubberBottomInset)
                 .foregroundStyle(.white)
                 .tint(.white)
             }
@@ -526,6 +565,30 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.24), value: isSearchPresented)
         .allowsHitTesting(true)
+        }
+    }
+
+    private func readerChromeLayout(for geometry: GeometryProxy) -> ReaderChromeLayout {
+        // The reader extends behind system areas, which can leave geometry's
+        // insets at zero. Use the window inset as a fallback for the camera
+        // island and Home/app-switcher indicator in landscape.
+        let windowInsets = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets ?? .zero
+        let geometryInsets = geometry.safeAreaInsets
+        let safeArea = EdgeInsets(
+            top: max(geometryInsets.top, windowInsets.top),
+            leading: max(geometryInsets.leading, windowInsets.left),
+            bottom: max(geometryInsets.bottom, windowInsets.bottom),
+            trailing: max(geometryInsets.trailing, windowInsets.right)
+        )
+        return ReaderChromeLayout(
+            isPhone: isPhone,
+            isLandscape: geometry.size.width > geometry.size.height,
+            safeArea: safeArea
+        )
     }
 
     private var topReaderControls: some View {
