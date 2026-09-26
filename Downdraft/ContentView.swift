@@ -425,6 +425,7 @@ struct ContentView: View {
     private func readerChrome(for document: PDFDocument) -> some View {
         GeometryReader { geometry in
             let layout = readerChromeLayout(for: geometry)
+            let searchIsInline = shouldPlaceSearchInline(in: geometry, layout: layout)
             ZStack {
             VStack(spacing: 0) {
                 LinearGradient(
@@ -432,7 +433,7 @@ struct ContentView: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: isPhone ? (layout.isLandscape ? 130 : 210) : 180)
+                .frame(height: isPhone ? (layout.isLandscape && (!isSearchPresented || searchIsInline) ? 130 : 210) : 180)
                 Spacer(minLength: 0)
                 LinearGradient(
                     colors: [.black.opacity(0), .black.opacity(0.78)],
@@ -448,7 +449,9 @@ struct ContentView: View {
                 // point within it is UI space and must not fall through to
                 // the gesture-heavy PDFView underneath.
                 Color.black.opacity(0.001)
-                    .frame(height: layout.topHitAreaHeight)
+                    .frame(height: isSearchPresented && !searchIsInline
+                        ? max(layout.topHitAreaHeight, 160)
+                        : layout.topHitAreaHeight)
                     .contentShape(Rectangle())
                     .onTapGesture { }
 
@@ -462,12 +465,20 @@ struct ContentView: View {
                             topReaderControls
 
                             Spacer(minLength: 0)
+
+                            if isSearchPresented, searchIsInline {
+                                searchControls
+                                    .frame(minWidth: 220, maxWidth: 360)
+                                    .onAppear {
+                                        isSearchFieldFocused = true
+                                    }
+                            }
                         }
                         .padding(.leading, layout.horizontalLeading)
                         .padding(.trailing, layout.horizontalTrailing)
                         .padding(.top, layout.topPadding)
 
-                        if isSearchPresented {
+                        if isSearchPresented, !searchIsInline {
                             searchControls
                                 .frame(maxWidth: .infinity)
                                 .padding(.leading, layout.horizontalLeading)
@@ -608,6 +619,17 @@ struct ContentView: View {
             isLandscape: geometry.size.width > geometry.size.height,
             safeArea: safeArea
         )
+    }
+
+    private func shouldPlaceSearchInline(in geometry: GeometryProxy, layout: ReaderChromeLayout) -> Bool {
+        guard isPhone, layout.isLandscape, isSearchPresented else { return false }
+
+        // There are about 300 points of fixed document, reader, and history
+        // controls. Keep at least 220 for entering a query; match navigation
+        // controls add roughly another 100 once search has results.
+        let requiredWidth: CGFloat = searchResults.isEmpty ? 720 : 820
+        let usableWidth = geometry.size.width - layout.horizontalLeading - layout.horizontalTrailing
+        return usableWidth >= requiredWidth
     }
 
     private var topReaderControls: some View {
