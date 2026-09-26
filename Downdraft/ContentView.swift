@@ -892,7 +892,7 @@ struct ContentView: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 58)
-        .background(.black.opacity(isSearchActive ? 0.58 : 0.001), in: Capsule())
+        .background(.black.opacity(isSearchActive ? 0.42 : 0.001), in: Capsule())
         .tint(.white)
         .foregroundStyle(.white)
     }
