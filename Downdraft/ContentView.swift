@@ -2406,15 +2406,14 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
     /// the normal restore list.
     let isTransient: Bool
     private var isAccessingFile: Bool
-    private var navigationHistory: [Int]
-    private var navigationHistoryIndex: Int
+    private var navigationHistory: NavigationHistory
 
     var canNavigateBack: Bool {
-        navigationHistoryIndex > 0
+        navigationHistory.canNavigateBack
     }
 
     var canNavigateForward: Bool {
-        navigationHistoryIndex < navigationHistory.count - 1
+        navigationHistory.canNavigateForward
     }
 
     /// Survives the app's reconstruction of its in-memory document objects.
@@ -2471,8 +2470,7 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
         self.lastPageModifiedAt = lastPageModifiedAt
         self.isTransient = isTransient
         self.isAccessingFile = isAccessingFile
-        self.navigationHistory = [lastPageIndex]
-        self.navigationHistoryIndex = 0
+        self.navigationHistory = NavigationHistory(currentPage: lastPageIndex)
     }
 
     convenience init?(url: URL, isAccessingSecurityScope: Bool) {
@@ -2617,28 +2615,15 @@ final class OpenDocument: Identifiable, @unchecked Sendable {
     }
 
     func recordNavigation(from source: Int, to destination: Int) {
-        guard source != destination else { return }
-        navigationHistory[navigationHistoryIndex] = source
-        navigationHistory.removeSubrange((navigationHistoryIndex + 1)..<navigationHistory.count)
-        navigationHistory.append(destination)
-        if navigationHistory.count > 100 {
-            navigationHistory.removeFirst(navigationHistory.count - 100)
-        }
-        navigationHistoryIndex = navigationHistory.count - 1
+        navigationHistory.record(from: source, to: destination)
     }
 
     func navigateBack(from currentPage: Int) -> Int? {
-        guard canNavigateBack else { return nil }
-        navigationHistory[navigationHistoryIndex] = currentPage
-        navigationHistoryIndex -= 1
-        return navigationHistory[navigationHistoryIndex]
+        navigationHistory.navigateBack(from: currentPage)
     }
 
     func navigateForward(from currentPage: Int) -> Int? {
-        guard canNavigateForward else { return nil }
-        navigationHistory[navigationHistoryIndex] = currentPage
-        navigationHistoryIndex += 1
-        return navigationHistory[navigationHistoryIndex]
+        navigationHistory.navigateForward(from: currentPage)
     }
 
     deinit {

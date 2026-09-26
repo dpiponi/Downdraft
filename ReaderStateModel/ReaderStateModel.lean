@@ -9,6 +9,58 @@ namespace DowndraftReaderState
 
 abbrev Page := Nat
 
+/-
+  `NavigationHistory` is the pure counterpart of the Swift type of the same
+  name. `past` is stored newest-first; `future` is stored nearest-next-first.
+  The app limits its stored history to 100 entries, which is a storage bound
+  and does not alter these cursor semantics.
+-/
+structure NavigationHistory where
+  past : List Page
+  current : Page
+  future : List Page
+deriving DecidableEq, Repr
+
+def initialHistory (page : Page) : NavigationHistory := {
+  past := []
+  current := page
+  future := []
+}
+
+def recordHistory (history : NavigationHistory) (source destination : Page) : NavigationHistory :=
+  if source == destination then history
+  else { past := source :: history.past, current := destination, future := [] }
+
+def goBack (history : NavigationHistory) (actualCurrent : Page) : Option (NavigationHistory × Page) :=
+  match history.past with
+  | [] => none
+  | target :: older =>
+      some ({ past := older, current := target, future := actualCurrent :: history.future }, target)
+
+def goForward (history : NavigationHistory) (actualCurrent : Page) : Option (NavigationHistory × Page) :=
+  match history.future with
+  | [] => none
+  | target :: later =>
+      some ({ past := actualCurrent :: history.past, current := target, future := later }, target)
+
+theorem recording_jump_discards_forward_history
+    (history : NavigationHistory) (source destination : Page)
+    (hDifferent : source ≠ destination) :
+    (recordHistory history source destination).future = [] := by
+  simp [recordHistory, hDifferent]
+
+theorem back_uses_actual_current_page
+    (older : List Page) (target : Page) (history : NavigationHistory) (actual : Page) :
+    goBack { history with past := target :: older } actual
+      = some ({ history with past := older, current := target, future := actual :: history.future }, target) := by
+  rfl
+
+theorem forward_uses_actual_current_page
+    (later : List Page) (target : Page) (history : NavigationHistory) (actual : Page) :
+    goForward { history with future := target :: later } actual
+      = some ({ history with past := actual :: history.past, current := target, future := later }, target) := by
+  rfl
+
 structure Revision where
   page : Page
   sequence : Nat
