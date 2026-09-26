@@ -1383,13 +1383,7 @@ struct ContentView: View {
     }
 
     private func navigate(to pageIndex: Int) {
-        guard let document = selectedDocument else { return }
-        recordNavigation(in: document, from: document.lastPageIndex, to: pageIndex)
-        // Move the scrubber at once; PDFKit's page-change notification can
-        // arrive late, or not at all for a request to the already-visible page.
-        scrubbedPageIndex = pageIndex
-        scrubberRevision += 1
-        requestPage(pageIndex)
+        explicitlyNavigate(to: pageIndex)
     }
 
     private func requestPage(_ pageIndex: Int) {
@@ -1403,11 +1397,38 @@ struct ContentView: View {
     private func recordNavigation(to selection: PDFSelection?) {
         guard let document = selectedDocument,
               let page = selection?.pages.first else { return }
-        recordNavigation(
-            in: document,
-            from: document.lastPageIndex,
-            to: document.pdfDocument?.index(for: page) ?? document.lastPageIndex
+        explicitlyNavigate(to: document.pdfDocument?.index(for: page) ?? document.lastPageIndex)
+    }
+
+    /// Search and contents jumps are intentional reader actions. Model them
+    /// before asking PDFKit to move, so a Back press has a durable entry even
+    /// if PDFKit delays its page-change callback.
+    private func explicitlyNavigate(to pageIndex: Int) {
+        guard let document = selectedDocument else { return }
+        let state = ReaderPositionState(
+            confirmedPage: document.lastPageIndex,
+            localPage: document.lastPageIndex,
+            linked: followsSharedPosition,
+            startupProtected: false,
+            pendingShared: nil,
+            handledShared: nil,
+            history: []
         )
+        let result = ReaderPositionStateMachine.transition(state, event: .explicitJump(pageIndex))
+        for effect in result.effects {
+            switch effect {
+            case let .addHistory(source, destination):
+                recordNavigation(in: document, from: source, to: destination)
+            case let .showPage(page):
+                // Update the scrubber at once; PDFKit's notification can be
+                // delayed or omitted for an already-visible destination.
+                scrubbedPageIndex = page
+                scrubberRevision += 1
+                requestPage(page)
+            case .saveLocal, .saveShared, .showConflict:
+                break
+            }
+        }
     }
 
     private func recordNavigation(in document: OpenDocument, from source: Int, to destination: Int) {

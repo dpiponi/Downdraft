@@ -104,4 +104,27 @@ final class ReaderPositionStateMachineTests: XCTestCase {
         XCTAssertEqual(linked.effects, [.saveLocal(20), .saveShared(20)])
         XCTAssertEqual(detached.effects, [.saveLocal(20)])
     }
+
+    func testExplicitJumpRecordsHistoryBeforeRequestingPage() {
+        let result = ReaderPositionStateMachine.transition(
+            state(page: 12),
+            event: .explicitJump(113)
+        )
+
+        XCTAssertEqual(result.state.confirmedPage, 113)
+        XCTAssertEqual(result.state.localPage, 113)
+        XCTAssertEqual(result.state.history, [12])
+        XCTAssertEqual(
+            result.effects,
+            [.addHistory(from: 12, to: 113), .showPage(113)]
+        )
+    }
+
+    func testExplicitJumpToCurrentPageDoesNotCreateHistory() {
+        let original = state(page: 12)
+        let result = ReaderPositionStateMachine.transition(original, event: .explicitJump(12))
+
+        XCTAssertEqual(result.state, original)
+        XCTAssertEqual(result.effects, [])
+    }
 }

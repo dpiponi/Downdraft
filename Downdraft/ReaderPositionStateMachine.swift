@@ -36,6 +36,7 @@ enum ReaderPositionEvent: Equatable {
     case startupProtectionExpired
     case pdfReportedPage(Int)
     case readerMoved(Int)
+    case explicitJump(Int)
     case sharedArrived(ReaderPositionRevision)
     case acceptShared
     case keepLocal
@@ -81,6 +82,17 @@ enum ReaderPositionStateMachine {
                 return (next, [.saveLocal(page), .saveShared(page)])
             }
             return (next, [.saveLocal(page)])
+
+        case let .explicitJump(page):
+            guard state.localPage != page else { return (state, []) }
+            var next = state
+            next.confirmedPage = page
+            next.localPage = page
+            next.history.insert(state.localPage, at: 0)
+            return (
+                next,
+                [.addHistory(from: state.localPage, to: page), .showPage(page)]
+            )
 
         case let .sharedArrived(revision):
             guard state.linked, state.handledShared != revision else {

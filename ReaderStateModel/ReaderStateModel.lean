@@ -30,6 +30,7 @@ inductive Event where
   | startupProtectionExpired
   | pdfReportedPage (page : Page)
   | readerMoved (page : Page)
+  | explicitJump (page : Page)
   | sharedArrived (revision : Revision)
   | acceptShared
   | keepLocal
@@ -64,6 +65,12 @@ def transition (state : State) (event : Event) : State × List Effect :=
         (next, [.saveLocal page, .saveShared page])
       else
         (next, [.saveLocal page])
+  | .explicitJump page =>
+      if state.localPage == page then
+        (state, [])
+      else
+        ({ withPage state page with history := state.localPage :: state.history },
+          [.addHistory state.localPage page, .showPage page])
   | .sharedArrived revision =>
       if !state.linked || state.handledShared == some revision then
         (state, [])
@@ -134,6 +141,16 @@ theorem detached_reader_move_never_writes_shared (state : State) (page : Page)
     (hLinked : state.linked = false) :
     (transition state (.readerMoved page)).2 = [.saveLocal page] := by
   simp [transition, hLinked]
+
+theorem explicit_jump_adds_history_and_requests_page (state : State) (page : Page)
+    (hDifferent : state.localPage ≠ page) :
+    (transition state (.explicitJump page)).2
+      = [.addHistory state.localPage page, .showPage page] := by
+  simp [transition, hDifferent]
+
+theorem explicit_jump_to_current_page_is_a_no_op (state : State) :
+    transition state (.explicitJump state.localPage) = (state, []) := by
+  simp [transition]
 
 theorem accepted_shared_position_adds_history_when_different
     (state : State) (revision : Revision)
