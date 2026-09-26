@@ -66,10 +66,10 @@ private struct ReaderChromeLayout {
     }
 
     /// The rail can use the screen edge now that PDFKit's duplicate scrollbar
-    /// is hidden. A large trailing inset is the landscape camera island, so
-    /// put the rail on the unobstructed edge instead.
+    /// is hidden. In landscape choose whichever physical edge has the smaller
+    /// safe-area obstruction: island left means rail right, and vice versa.
     var bookmarksUseLeadingEdge: Bool {
-        isPhone && isLandscape && safeArea.trailing > 24
+        isPhone && isLandscape && safeArea.leading < safeArea.trailing
     }
 
     var bookmarkEdgeInset: CGFloat {
