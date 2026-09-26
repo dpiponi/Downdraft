@@ -528,14 +528,16 @@ struct ContentView: View {
                     if layout.bookmarksUseLeadingEdge {
                         bookmarkControls(
                             visibleLimit: visibleBookmarkLimit(for: geometry.size.height, layout: layout),
-                            attachedToLeadingEdge: true
+                            attachedToLeadingEdge: true,
+                            isAttachedToScreenEdge: layout.bookmarkEdgeInset < 1
                         )
                         Spacer(minLength: 0)
                     } else {
                         Spacer(minLength: 0)
                         bookmarkControls(
                             visibleLimit: visibleBookmarkLimit(for: geometry.size.height, layout: layout),
-                            attachedToLeadingEdge: false
+                            attachedToLeadingEdge: false,
+                            isAttachedToScreenEdge: layout.bookmarkEdgeInset < 1
                         )
                     }
                 }
@@ -781,7 +783,11 @@ struct ContentView: View {
             }
     }
 
-    private func bookmarkControls(visibleLimit: Int, attachedToLeadingEdge: Bool) -> some View {
+    private func bookmarkControls(
+        visibleLimit: Int,
+        attachedToLeadingEdge: Bool,
+        isAttachedToScreenEdge: Bool
+    ) -> some View {
         VStack(spacing: 8) {
             ForEach(Array(visibleBookmarks.prefix(visibleLimit)), id: \.index) { bookmark in
                 BookmarkSlotButton(
@@ -835,13 +841,16 @@ struct ContentView: View {
             .frame(width: 40, height: 40)
         }
         .padding(8)
-        // Extend the attached end beyond the display boundary. Its corner
-        // then curves out of sight, so the visible rail joins the screen edge
-        // without the sharp, inward-pointing corner of a normal rectangle.
         .background {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(.black.opacity(0.62))
-                .padding(attachedToLeadingEdge ? .leading : .trailing, -12)
+                // Extend only a genuinely attached end beyond the display.
+                // A rail held off the screen by a safe area keeps ordinary
+                // rounded corners on both sides.
+                .padding(
+                    attachedToLeadingEdge ? .leading : .trailing,
+                    isAttachedToScreenEdge ? -12 : 0
+                )
         }
         .tint(.white)
         .foregroundStyle(.white)
