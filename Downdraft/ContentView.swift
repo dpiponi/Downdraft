@@ -30,6 +30,11 @@ private struct BookmarkRailSafeRegion {
     var height: CGFloat { max(0, bottom - top) }
 }
 
+private struct ChapterSliderMark: Hashable {
+    let position: Double
+    let level: Int
+}
+
 struct ContentView: View {
     @State private var documents = OpenDocument.restoreSavedDocuments()
     @State private var selectedDocumentID: OpenDocument.ID?
@@ -61,7 +66,7 @@ struct ContentView: View {
     @FocusState private var isSearchFieldFocused: Bool
     @State private var bookmarkPreview: BookmarkPreview?
     @State private var followsSharedPosition = true
-    @State private var showsChapterMarks = true
+    @State private var chapterMarkDepth: ChapterMarkDepth = .topLevel
     @State private var readingPositionConflict: ReadingPositionConflict?
     @State private var bookmarkRailPlacement: CGFloat = 0
     @State private var bookmarkRailPlacementIsLandscape: Bool?
@@ -278,8 +283,9 @@ struct ContentView: View {
             if let outline = selectedDocument?.pdfDocument?.outlineRoot {
                 TableOfContentsView(
                     entries: TableOfContentsEntry.children(of: outline),
-                    showsChapterMarks: showsChapterMarks,
-                    setShowsChapterMarks: setShowsChapterMarks
+                    chapterMarkDepth: chapterMarkDepth,
+                    hasSecondLevelEntries: selectedDocument?.pdfDocument.map(hasSecondLevelOutlineEntries) ?? false,
+                    setChapterMarkDepth: setChapterMarkDepth
                 ) { destination in
                     clearSearch()
                     if let document = selectedDocument,
@@ -415,7 +421,7 @@ struct ContentView: View {
         PageScrubber(
             pageIndex: scrubbedPageIndex,
             pageCount: document.pageCount,
-            chapterPositions: topLevelChapterPositions(in: document),
+            chapterPositions: chapterSliderMarks(in: document),
             seek: requestPage,
             commit: { sourcePageIndex, destinationPageIndex in
                 guard let selectedDocument else { return }
@@ -433,24 +439,55 @@ struct ContentView: View {
     /// The PDF outline is already available for the contents sheet.  Its
     /// top-level entries make useful, restrained landmarks on the page bar
     /// without inspecting any additional document data.
-    private func topLevelChapterPositions(in document: PDFDocument) -> [Double] {
-        guard showsChapterMarks,
+    private func chapterSliderMarks(in document: PDFDocument) -> [ChapterSliderMark] {
+        guard chapterMarkDepth != .none,
               document.pageCount > 1,
               let outline = document.outlineRoot else {
             return []
         }
 
         let lastPageIndex = Double(document.pageCount - 1)
-        var seen = Set<Int>()
-        return (0..<outline.numberOfChildren).compactMap { index in
-            guard let entry = outline.child(at: index),
-                  let page = entry.destination?.page else {
-                return nil
-            }
+        var levelsByPage = [Int: Int]()
+        func addMark(for entry: PDFOutline, level: Int) {
+            guard let page = entry.destination?.page else { return }
             let pageIndex = document.index(for: page)
-            guard seen.insert(pageIndex).inserted else { return nil }
-            return Double(pageIndex) / lastPageIndex
+            levelsByPage[pageIndex] = min(levelsByPage[pageIndex] ?? level, level)
         }
+        for index in 0..<outline.numberOfChildren {
+            guard let entry = outline.child(at: index) else { continue }
+            addMark(for: entry, level: 0)
+            if chapterMarkDepth == .topTwoLevels {
+                for childIndex in 0..<entry.numberOfChildren {
+                    if let child = entry.child(at: childIndex) {
+                        addMark(for: child, level: 1)
+                    }
+                }
+            }
+        }
+        return levelsByPage.map { pageIndex, level in
+            ChapterSliderMark(position: Double(pageIndex) / lastPageIndex, level: level)
+        }
+        .sorted { $0.position < $1.position }
+    }
+
+    private func hasSecondLevelOutlineEntries(in document: PDFDocument) -> Bool {
+        guard let outline = document.outlineRoot else { return false }
+        return (0..<outline.numberOfChildren).contains {
+            outline.child(at: $0)?.numberOfChildren ?? 0 > 0
+        }
+    }
+
+    private func guessedChapterMarkDepth(for document: PDFDocument) -> ChapterMarkDepth {
+        guard let outline = document.outlineRoot else { return .none }
+        let topLevelCount = outline.numberOfChildren
+        let secondLevelCount = (0..<topLevelCount).reduce(0) {
+            $0 + (outline.child(at: $1)?.numberOfChildren ?? 0)
+        }
+        if topLevelCount == 0 { return .none }
+        if topLevelCount <= 14, topLevelCount + secondLevelCount <= 28 {
+            return secondLevelCount > 0 ? .topTwoLevels : .topLevel
+        }
+        return topLevelCount <= 20 ? .topLevel : .none
     }
 
     /// Reader controls deliberately sit beside the PDF view, rather than in a
@@ -1160,7 +1197,11 @@ struct ContentView: View {
     private func finishSelecting(_ document: OpenDocument) {
         let readingPreference = document.readingStateIdentity.map(DeviceReadingModeStore.preference(for:)) ?? .linked
         followsSharedPosition = readingPreference.followsSharedPosition
-        showsChapterMarks = readingPreference.showsChapterMarks
+        let inferredChapterMarkDepth = document.pdfDocument.map(guessedChapterMarkDepth) ?? .none
+        chapterMarkDepth = readingPreference.chapterMarkDepth ?? inferredChapterMarkDepth
+        if readingPreference.chapterMarkDepth == nil, let identity = document.readingStateIdentity {
+            DeviceReadingModeStore.setChapterMarkDepth(chapterMarkDepth, for: identity)
+        }
         readingPositionConflict = nil
         if followsSharedPosition {
             prepareLinkedReadingState(for: document)
@@ -1306,10 +1347,10 @@ struct ContentView: View {
         saveDocuments()
     }
 
-    private func setShowsChapterMarks(_ value: Bool) {
+    private func setChapterMarkDepth(_ value: ChapterMarkDepth) {
         guard let identity = selectedDocument?.readingStateIdentity else { return }
-        showsChapterMarks = value
-        DeviceReadingModeStore.setShowsChapterMarks(value, for: identity)
+        chapterMarkDepth = value
+        DeviceReadingModeStore.setChapterMarkDepth(value, for: identity)
     }
 
     private func validPageIndex(_ pageIndex: Int, in document: OpenDocument) -> Int {
@@ -1768,7 +1809,7 @@ struct ContentView: View {
 private struct PageScrubber: View {
     let pageIndex: Int
     let pageCount: Int
-    let chapterPositions: [Double]
+    let chapterPositions: [ChapterSliderMark]
     let seek: (Int) -> Void
     let commit: (Int, Int) -> Void
     @State private var pageIndexWhenScrubbingBegan: Int?
@@ -1833,7 +1874,7 @@ private struct PageScrubber: View {
 private struct CircularPageSlider: UIViewRepresentable {
     @Binding var value: Double
     let range: ClosedRange<Double>
-    let chapterPositions: [Double]
+    let chapterPositions: [ChapterSliderMark]
     let onEditingChanged: (Bool) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -1902,7 +1943,7 @@ private struct CircularPageSlider: UIViewRepresentable {
 /// makes chapter ticks unambiguously sit above both halves of the track and,
 /// where necessary, the circular handle.
 private final class ChapterMarkedSlider: UISlider {
-    var chapterPositions: [Double] = [] {
+    var chapterPositions: [ChapterSliderMark] = [] {
         didSet { refreshChapterMarkers() }
     }
 
@@ -1937,14 +1978,18 @@ private final class ChapterMarkedSlider: UISlider {
         // it stops half a thumb-width from either end. Ask UIKit for each
         // prospective thumb centre so the chapter marks exactly agree with
         // the position the slider itself uses.
-        tickOverlay.ticks = chapterPositions.map { position in
-            let chapterValue = minimumValue + Float(position) * range
+        tickOverlay.ticks = chapterPositions.map { mark in
+            let chapterValue = minimumValue + Float(mark.position) * range
             let chapterCenter = thumbRect(
                 forBounds: bounds,
                 trackRect: track,
                 value: chapterValue
             ).midX
-            return ChapterTick(x: chapterCenter, isPast: CGFloat(position) <= currentPosition)
+            return ChapterTick(
+                x: chapterCenter,
+                isPast: CGFloat(mark.position) <= currentPosition,
+                level: mark.level
+            )
         }
         tickOverlay.thumbCenter = thumbCenter
         tickOverlay.thumbRadius = thumbRect(forBounds: bounds, trackRect: track, value: value).width / 2
@@ -1976,14 +2021,15 @@ private final class ChapterTickOverlay: UIView {
             // same muted treatment as one on the filled track. In particular,
             // this covers marks just to the handle's right of centre.
             let isCoveredByThumb = abs(tick.x - thumbCenter) <= thumbRadius
+            let isSecondLevel = tick.level > 0
             let color = tick.isPast || isCoveredByThumb
-                ? UIColor(white: 0.38, alpha: 0.9)
-                : UIColor.white.withAlphaComponent(0.82)
+                ? UIColor(white: isSecondLevel ? 0.48 : 0.38, alpha: isSecondLevel ? 0.65 : 0.9)
+                : UIColor.white.withAlphaComponent(isSecondLevel ? 0.48 : 0.82)
             context?.setFillColor(color.cgColor)
             context?.fill(CGRect(
-                x: tick.x - 1,
+                x: tick.x - (isSecondLevel ? 0.5 : 1),
                 y: trackCenterY - trackHeight / 2,
-                width: 2,
+                width: isSecondLevel ? 1 : 2,
                 height: trackHeight
             ))
         }
@@ -1993,6 +2039,7 @@ private final class ChapterTickOverlay: UIView {
 private struct ChapterTick {
     let x: CGFloat
     let isPast: Bool
+    let level: Int
 }
 
 @MainActor
@@ -2321,8 +2368,9 @@ private struct TableOfContentsEntry: Identifiable {
 
 private struct TableOfContentsView: View {
     let entries: [TableOfContentsEntry]
-    let showsChapterMarks: Bool
-    let setShowsChapterMarks: (Bool) -> Void
+    let chapterMarkDepth: ChapterMarkDepth
+    let hasSecondLevelEntries: Bool
+    let setChapterMarkDepth: (ChapterMarkDepth) -> Void
     let select: (PDFDestination) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -2331,18 +2379,37 @@ private struct TableOfContentsView: View {
             List {
                 Section {
                     Button {
-                        setShowsChapterMarks(!showsChapterMarks)
+                        setChapterMarkDepth(chapterMarkDepth == .none ? .topLevel : .none)
                     } label: {
                         HStack {
-                            Text("Show chapter marks on slider")
+                            Text("Show top-level marks on slider")
                             Spacer()
-                            if showsChapterMarks {
+                            if chapterMarkDepth != .none {
                                 Image(systemName: "checkmark")
                             }
                         }
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.primary)
+                    if hasSecondLevelEntries {
+                        Button {
+                            setChapterMarkDepth(
+                                chapterMarkDepth == .topTwoLevels ? .topLevel : .topTwoLevels
+                            )
+                        } label: {
+                            HStack {
+                                Text("Show second-level marks")
+                                Spacer()
+                                if chapterMarkDepth == .topTwoLevels {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                            .padding(.leading, 24)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(chapterMarkDepth == .none ? .secondary : .primary)
+                        .disabled(chapterMarkDepth == .none)
+                    }
                 }
                 OutlineGroup(entries, children: \.children) { entry in
                     if let destination = entry.destination {

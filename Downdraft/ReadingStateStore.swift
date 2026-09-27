@@ -3,6 +3,12 @@ import Foundation
 import PDFKit
 import UIKit
 
+enum ChapterMarkDepth: Int, Codable, Equatable {
+    case none = 0
+    case topLevel = 1
+    case topTwoLevels = 2
+}
+
 /// Syncs the small, personal state associated with a PDF, rather than the
 /// PDF or Files permission itself.  Each field has its own timestamp, so a
 /// new bookmark on one device cannot overwrite a newer reading position from
@@ -275,7 +281,7 @@ enum DeviceReadingModeStore {
     struct Preference: Codable, Equatable {
         var followsSharedPosition: Bool
         var detachedPageIndex: Int?
-        var showsChapterMarks: Bool
+        var chapterMarkDepth: ChapterMarkDepth?
         var localPageIndex: Int?
         var localPageModifiedAt: Date?
         var handledSharedPageIndex: Int?
@@ -285,7 +291,7 @@ enum DeviceReadingModeStore {
         init(
             followsSharedPosition: Bool,
             detachedPageIndex: Int?,
-            showsChapterMarks: Bool = true,
+            chapterMarkDepth: ChapterMarkDepth? = nil,
             localPageIndex: Int? = nil,
             localPageModifiedAt: Date? = nil,
             handledSharedPageIndex: Int? = nil,
@@ -294,7 +300,7 @@ enum DeviceReadingModeStore {
         ) {
             self.followsSharedPosition = followsSharedPosition
             self.detachedPageIndex = detachedPageIndex
-            self.showsChapterMarks = showsChapterMarks
+            self.chapterMarkDepth = chapterMarkDepth
             self.localPageIndex = localPageIndex
             self.localPageModifiedAt = localPageModifiedAt
             self.handledSharedPageIndex = handledSharedPageIndex
@@ -306,6 +312,7 @@ enum DeviceReadingModeStore {
             case followsSharedPosition
             case detachedPageIndex
             case showsChapterMarks
+            case chapterMarkDepth
             case localPageIndex
             case localPageModifiedAt
             case handledSharedPageIndex
@@ -317,9 +324,14 @@ enum DeviceReadingModeStore {
             let values = try decoder.container(keyedBy: CodingKeys.self)
             followsSharedPosition = try values.decodeIfPresent(Bool.self, forKey: .followsSharedPosition) ?? true
             detachedPageIndex = try values.decodeIfPresent(Int.self, forKey: .detachedPageIndex)
-            // Existing preferences predate this setting and should retain the
-            // original, uncluttered-by-default behaviour of showing marks.
-            showsChapterMarks = try values.decodeIfPresent(Bool.self, forKey: .showsChapterMarks) ?? true
+            if let rawDepth = try values.decodeIfPresent(Int.self, forKey: .chapterMarkDepth),
+               let depth = ChapterMarkDepth(rawValue: rawDepth) {
+                chapterMarkDepth = depth
+            } else if let legacyShowsMarks = try values.decodeIfPresent(Bool.self, forKey: .showsChapterMarks) {
+                chapterMarkDepth = legacyShowsMarks ? .topLevel : ChapterMarkDepth.none
+            } else {
+                chapterMarkDepth = nil
+            }
             // The old detached cursor was this device's only local position.
             // Preserve it when upgrading to a local cursor for every mode.
             localPageIndex = try values.decodeIfPresent(Int.self, forKey: .localPageIndex)
@@ -330,7 +342,23 @@ enum DeviceReadingModeStore {
             handledSharedDeviceID = try values.decodeIfPresent(String.self, forKey: .handledSharedDeviceID)
         }
 
+        func encode(to encoder: Encoder) throws {
+            var values = encoder.container(keyedBy: CodingKeys.self)
+            try values.encode(followsSharedPosition, forKey: .followsSharedPosition)
+            try values.encodeIfPresent(detachedPageIndex, forKey: .detachedPageIndex)
+            try values.encodeIfPresent(chapterMarkDepth?.rawValue, forKey: .chapterMarkDepth)
+            try values.encodeIfPresent(localPageIndex, forKey: .localPageIndex)
+            try values.encodeIfPresent(localPageModifiedAt, forKey: .localPageModifiedAt)
+            try values.encodeIfPresent(handledSharedPageIndex, forKey: .handledSharedPageIndex)
+            try values.encodeIfPresent(handledSharedPageModifiedAt, forKey: .handledSharedPageModifiedAt)
+            try values.encodeIfPresent(handledSharedDeviceID, forKey: .handledSharedDeviceID)
+        }
+
         static let linked = Preference(followsSharedPosition: true, detachedPageIndex: nil)
+
+        var showsChapterMarks: Bool {
+            (chapterMarkDepth ?? .topLevel) != .none
+        }
     }
 
     private static let preferencesKey = "device-reading-position-preferences"
@@ -400,9 +428,9 @@ enum DeviceReadingModeStore {
         return .init(index: pageIndex, modifiedAt: modifiedAt, deviceID: deviceID, deviceName: nil)
     }
 
-    static func setShowsChapterMarks(_ showsChapterMarks: Bool, for identity: String) {
+    static func setChapterMarkDepth(_ depth: ChapterMarkDepth, for identity: String) {
         var preference = preference(for: identity)
-        preference.showsChapterMarks = showsChapterMarks
+        preference.chapterMarkDepth = depth
         save(preference, for: identity)
     }
 
