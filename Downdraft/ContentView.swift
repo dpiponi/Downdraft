@@ -23,6 +23,13 @@ private struct ReadingPositionConflict: Identifiable {
     }
 }
 
+private struct BookmarkRailSafeRegion {
+    let top: CGFloat
+    let bottom: CGFloat
+
+    var height: CGFloat { max(0, bottom - top) }
+}
+
 struct ContentView: View {
     @State private var documents = OpenDocument.restoreSavedDocuments()
     @State private var selectedDocumentID: OpenDocument.ID?
@@ -113,17 +120,14 @@ struct ContentView: View {
         }
     }
 
-    /// Calculates the thumbnail count from the actual reader height. The rail
-    /// grows upward from the fixed add button, but must never intrude into the
-    /// top controls (including the optional search row).
-    private func visibleBookmarkLimit(for readerHeight: CGFloat, layout: ReaderChromeLayout) -> Int {
-        let topControlsClearance = layout.bookmarkTopClearance
-        let railBottomInset = layout.bookmarkBottomInset
+    /// Calculates the thumbnail count from the actual safe band available to
+    /// the rail. Overflow bookmarks move into the menu rather than allowing
+    /// the rail to cover another reader control.
+    private func visibleBookmarkLimit(availableHeight: CGFloat) -> Int {
         let railVerticalPadding: CGFloat = 16
         let thumbnailHeight: CGFloat = 62
         let addButtonHeight: CGFloat = 40
         let spacing: CGFloat = 8
-        let availableHeight = max(0, readerHeight - topControlsClearance - railBottomInset)
         let directCapacity = max(
             1,
             Int(((availableHeight - railVerticalPadding - addButtonHeight) / (thumbnailHeight + spacing)).rounded(.down))
@@ -131,6 +135,27 @@ struct ContentView: View {
         return visibleBookmarks.count > directCapacity
             ? max(1, directCapacity - 1)
             : directCapacity
+    }
+
+    private func bookmarkRailSafeRegion(
+        readerHeight: CGFloat,
+        layout: ReaderChromeLayout,
+        searchIsInline: Bool
+    ) -> BookmarkRailSafeRegion {
+        let topRowBottom = layout.topPadding + 58
+        let separateSearchHeight: CGFloat = isSearchPresented && !searchIsInline ? 64 : 0
+        let top = topRowBottom + separateSearchHeight + 12
+
+        // PageScrubber is 51 points high including its padding. Its enclosing
+        // chrome adds 6 above and 10/14 below, then we leave a small gap so a
+        // rail drag cannot obscure the scrubber's hit target.
+        let scrubberChromeHeight: CGFloat = isPhone ? 71 : 67
+        let conflictClearance: CGFloat = readingPositionConflict == nil ? 0 : 62
+        let bottom = max(
+            top,
+            readerHeight - layout.scrubberBottomInset - scrubberChromeHeight - 12 - conflictClearance
+        )
+        return BookmarkRailSafeRegion(top: top, bottom: bottom)
     }
 
     private func bookmarkRailHeight(visibleLimit: Int) -> CGFloat {
@@ -145,11 +170,10 @@ struct ContentView: View {
     }
 
     private func bookmarkRailTravel(
-        readerHeight: CGFloat,
-        railHeight: CGFloat,
-        layout: ReaderChromeLayout
+        safeRegion: BookmarkRailSafeRegion,
+        railHeight: CGFloat
     ) -> CGFloat {
-        max(0, readerHeight - layout.bookmarkTopClearance - layout.bookmarkBottomInset - railHeight)
+        max(0, safeRegion.height - railHeight)
     }
 
     private func effectiveBookmarkRailOffset(travel: CGFloat, layout: ReaderChromeLayout) -> CGFloat {
@@ -436,12 +460,16 @@ struct ContentView: View {
         GeometryReader { geometry in
             let layout = readerChromeLayout(for: geometry)
             let searchIsInline = shouldPlaceSearchInline(in: geometry, layout: layout)
-            let bookmarkVisibleLimit = visibleBookmarkLimit(for: geometry.size.height, layout: layout)
+            let bookmarkSafeRegion = bookmarkRailSafeRegion(
+                readerHeight: geometry.size.height,
+                layout: layout,
+                searchIsInline: searchIsInline
+            )
+            let bookmarkVisibleLimit = visibleBookmarkLimit(availableHeight: bookmarkSafeRegion.height)
             let currentBookmarkRailHeight = bookmarkRailHeight(visibleLimit: bookmarkVisibleLimit)
             let currentBookmarkRailTravel = bookmarkRailTravel(
-                readerHeight: geometry.size.height,
-                railHeight: currentBookmarkRailHeight,
-                layout: layout
+                safeRegion: bookmarkSafeRegion,
+                railHeight: currentBookmarkRailHeight
             )
             ZStack {
             VStack(spacing: 0) {
@@ -573,7 +601,7 @@ struct ContentView: View {
                         }
                 )
             }
-            .padding(.bottom, layout.bookmarkBottomInset)
+            .padding(.bottom, geometry.size.height - bookmarkSafeRegion.bottom)
             .onAppear {
                 loadBookmarkRailPlacement(for: layout)
             }
