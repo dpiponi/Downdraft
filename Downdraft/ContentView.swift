@@ -56,6 +56,10 @@ struct ContentView: View {
     @State private var followsSharedPosition = true
     @State private var showsChapterMarks = true
     @State private var readingPositionConflict: ReadingPositionConflict?
+    @State private var bookmarkRailPlacement: CGFloat = 0
+    @State private var bookmarkRailPlacementIsLandscape: Bool?
+    @State private var bookmarkRailDragTranslation: CGFloat = 0
+    @State private var isDraggingBookmarkRail = false
 
     private var selectedDocument: OpenDocument? {
         documents.first { $0.id == selectedDocumentID }
@@ -127,6 +131,66 @@ struct ContentView: View {
         return visibleBookmarks.count > directCapacity
             ? max(1, directCapacity - 1)
             : directCapacity
+    }
+
+    private func bookmarkRailHeight(visibleLimit: Int) -> CGFloat {
+        let visibleCount = min(visibleBookmarks.count, visibleLimit)
+        let includesOverflowMenu = visibleBookmarks.count > visibleLimit
+        let itemCount = visibleCount + (includesOverflowMenu ? 1 : 0) + 1 // Add button.
+        let contentHeight = CGFloat(visibleCount) * 62
+            + (includesOverflowMenu ? 44 : 0)
+            + 40
+            + CGFloat(max(0, itemCount - 1)) * 8
+        return contentHeight + 16 // The rail's vertical padding.
+    }
+
+    private func bookmarkRailTravel(
+        readerHeight: CGFloat,
+        railHeight: CGFloat,
+        layout: ReaderChromeLayout
+    ) -> CGFloat {
+        max(0, readerHeight - layout.bookmarkTopClearance - layout.bookmarkBottomInset - railHeight)
+    }
+
+    private func effectiveBookmarkRailOffset(travel: CGFloat, layout: ReaderChromeLayout) -> CGFloat {
+        let placement = bookmarkRailPlacementIsLandscape == layout.isLandscape
+            ? bookmarkRailPlacement
+            : BookmarkRailPlacementStore.placement(isLandscape: layout.isLandscape)
+        let baseOffset = -placement * travel
+        return min(0, max(-travel, baseOffset + bookmarkRailDragTranslation))
+    }
+
+    private func loadBookmarkRailPlacement(for layout: ReaderChromeLayout) {
+        guard bookmarkRailPlacementIsLandscape != layout.isLandscape else { return }
+        bookmarkRailPlacement = BookmarkRailPlacementStore.placement(isLandscape: layout.isLandscape)
+        bookmarkRailPlacementIsLandscape = layout.isLandscape
+        bookmarkRailDragTranslation = 0
+        isDraggingBookmarkRail = false
+    }
+
+    private func updateBookmarkRailDrag(
+        _ translation: CGSize,
+        travel: CGFloat,
+        layout: ReaderChromeLayout
+    ) {
+        guard abs(translation.height) > abs(translation.width), abs(translation.height) > 6 else { return }
+        loadBookmarkRailPlacement(for: layout)
+        let baseOffset = -bookmarkRailPlacement * travel
+        bookmarkRailDragTranslation = min(0, max(-travel, baseOffset + translation.height)) - baseOffset
+        isDraggingBookmarkRail = true
+    }
+
+    private func finishBookmarkRailDrag(travel: CGFloat, layout: ReaderChromeLayout) {
+        defer {
+            bookmarkRailDragTranslation = 0
+            isDraggingBookmarkRail = false
+        }
+        guard isDraggingBookmarkRail else { return }
+        let finalOffset = effectiveBookmarkRailOffset(travel: travel, layout: layout)
+        let placement = travel > 0 ? -finalOffset / travel : 0
+        bookmarkRailPlacement = min(1, max(0, placement))
+        bookmarkRailPlacementIsLandscape = layout.isLandscape
+        BookmarkRailPlacementStore.save(bookmarkRailPlacement, isLandscape: layout.isLandscape)
     }
 
     var body: some View {
@@ -372,6 +436,13 @@ struct ContentView: View {
         GeometryReader { geometry in
             let layout = readerChromeLayout(for: geometry)
             let searchIsInline = shouldPlaceSearchInline(in: geometry, layout: layout)
+            let bookmarkVisibleLimit = visibleBookmarkLimit(for: geometry.size.height, layout: layout)
+            let currentBookmarkRailHeight = bookmarkRailHeight(visibleLimit: bookmarkVisibleLimit)
+            let currentBookmarkRailTravel = bookmarkRailTravel(
+                readerHeight: geometry.size.height,
+                railHeight: currentBookmarkRailHeight,
+                layout: layout
+            )
             ZStack {
             VStack(spacing: 0) {
                 LinearGradient(
@@ -470,7 +541,7 @@ struct ContentView: View {
                 HStack {
                     if layout.bookmarksUseLeadingEdge {
                         bookmarkControls(
-                            visibleLimit: visibleBookmarkLimit(for: geometry.size.height, layout: layout),
+                            visibleLimit: bookmarkVisibleLimit,
                             attachedToLeadingEdge: true,
                             isAttachedToScreenEdge: layout.bookmarkEdgeInset < 1
                         )
@@ -478,7 +549,7 @@ struct ContentView: View {
                     } else {
                         Spacer(minLength: 0)
                         bookmarkControls(
-                            visibleLimit: visibleBookmarkLimit(for: geometry.size.height, layout: layout),
+                            visibleLimit: bookmarkVisibleLimit,
                             attachedToLeadingEdge: false,
                             isAttachedToScreenEdge: layout.bookmarkEdgeInset < 1
                         )
@@ -487,8 +558,28 @@ struct ContentView: View {
                 // The stack grows upward while the add control stays on the
                 // unobstructed physical screen edge.
                 .padding(layout.bookmarksUseLeadingEdge ? .leading : .trailing, layout.bookmarkEdgeInset)
+                .offset(y: effectiveBookmarkRailOffset(travel: currentBookmarkRailTravel, layout: layout))
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 10)
+                        .onChanged { value in
+                            updateBookmarkRailDrag(
+                                value.translation,
+                                travel: currentBookmarkRailTravel,
+                                layout: layout
+                            )
+                        }
+                        .onEnded { _ in
+                            finishBookmarkRailDrag(travel: currentBookmarkRailTravel, layout: layout)
+                        }
+                )
             }
             .padding(.bottom, layout.bookmarkBottomInset)
+            .onAppear {
+                loadBookmarkRailPlacement(for: layout)
+            }
+            .onChange(of: layout.isLandscape) { _, _ in
+                loadBookmarkRailPlacement(for: layout)
+            }
             .transition(.move(edge: .trailing).combined(with: .opacity))
 
             if let bookmarkPreview {
