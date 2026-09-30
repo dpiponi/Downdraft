@@ -1545,9 +1545,7 @@ struct ContentView: View {
             case let .showPage(page):
                 // Update the scrubber at once; PDFKit's notification can be
                 // delayed or omitted for an already-visible destination.
-                scrubbedPageIndex = page
-                scrubberRevision += 1
-                requestPage(page)
+                showRequestedPage(page)
             case .saveLocal, .saveShared, .showConflict:
                 break
             }
@@ -1561,17 +1559,26 @@ struct ContentView: View {
 
     private func navigateBack(in document: OpenDocument) {
         let currentPageIndex = confirmedCurrentPageIndex(for: document)
-        guard let pageIndex = document.navigateBack(from: currentPageIndex) else { return }
-        navigationRevision += 1
-        scrubbedPageIndex = pageIndex
-        scrubberRevision += 1
-        requestPage(pageIndex)
+        applyHistoryNavigation(document.navigateBack(from: currentPageIndex))
     }
 
     private func navigateForward(in document: OpenDocument) {
         let currentPageIndex = confirmedCurrentPageIndex(for: document)
-        guard let pageIndex = document.navigateForward(from: currentPageIndex) else { return }
+        applyHistoryNavigation(document.navigateForward(from: currentPageIndex))
+    }
+
+    /// Applies a target produced by the history model. Keeping this in one
+    /// place is important: both directions must update the visual scrubber
+    /// immediately, even when PDFKit delays its page-change notification.
+    private func applyHistoryNavigation(_ pageIndex: Int?) {
+        guard let pageIndex else { return }
         navigationRevision += 1
+        showRequestedPage(pageIndex)
+    }
+
+    /// Reflects an explicit page request in the controls before PDFKit has
+    /// necessarily delivered its matching page-change callback.
+    private func showRequestedPage(_ pageIndex: Int) {
         scrubbedPageIndex = pageIndex
         scrubberRevision += 1
         requestPage(pageIndex)
@@ -1712,10 +1719,8 @@ struct ContentView: View {
                 recordNavigation(in: document, from: source, to: destination)
             case let .showPage(page):
                 let pageIndex = validPageIndex(page, in: document)
-                scrubbedPageIndex = pageIndex
                 pdfKitCurrentPageIndex = pageIndex
-                scrubberRevision += 1
-                requestPage(pageIndex)
+                showRequestedPage(pageIndex)
             case .saveLocal, .saveShared, .showConflict:
                 break
             }
@@ -1995,28 +2000,25 @@ private final class ChapterMarkedSlider: UISlider {
         // it stops half a thumb-width from either end. Ask UIKit for each
         // prospective thumb centre so the chapter marks exactly agree with
         // the position the slider itself uses.
-        let chapterTicks = chapterPositions.map { mark in
-            let chapterValue = minimumValue + Float(mark.position) * range
-            let chapterCenter = thumbRect(
+        func sliderX(for position: Double) -> CGFloat {
+            let markerValue = minimumValue + Float(position) * range
+            return thumbRect(
                 forBounds: bounds,
                 trackRect: track,
-                value: chapterValue
+                value: markerValue
             ).midX
+        }
+
+        let chapterTicks = chapterPositions.map { mark in
             return ChapterTick(
-                x: chapterCenter,
+                x: sliderX(for: mark.position),
                 isPast: CGFloat(mark.position) <= currentPosition,
                 level: mark.level
             )
         }
         let bookmarkTicks = bookmarkPositions.map { position in
-            let bookmarkValue = minimumValue + Float(position) * range
-            let bookmarkCenter = thumbRect(
-                forBounds: bounds,
-                trackRect: track,
-                value: bookmarkValue
-            ).midX
             return ChapterTick(
-                x: bookmarkCenter,
+                x: sliderX(for: position),
                 isPast: CGFloat(position) <= currentPosition,
                 level: 0,
                 isBookmark: true
