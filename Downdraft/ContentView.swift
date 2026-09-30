@@ -2057,11 +2057,12 @@ private final class ChapterTickOverlay: UIView {
             let isCoveredByThumb = abs(tick.x - thumbCenter) <= thumbRadius
             if tick.isBookmark {
                 context?.setFillColor(UIColor.white.withAlphaComponent(0.96).cgColor)
-                context?.fill(CGRect(
-                    x: tick.x - 1.5,
-                    y: trackCenterY - trackHeight / 2 - 1.5,
-                    width: 3,
-                    height: trackHeight + 3
+                let diameter: CGFloat = 5
+                context?.fillEllipse(in: CGRect(
+                    x: tick.x - diameter / 2,
+                    y: trackCenterY - trackHeight / 2 - diameter - 3,
+                    width: diameter,
+                    height: diameter
                 ))
                 continue
             }
