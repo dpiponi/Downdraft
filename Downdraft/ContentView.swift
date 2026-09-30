@@ -422,6 +422,7 @@ struct ContentView: View {
             pageIndex: scrubbedPageIndex,
             pageCount: document.pageCount,
             chapterPositions: chapterSliderMarks(in: document),
+            bookmarkPositions: bookmarkSliderPositions(pageCount: document.pageCount),
             seek: requestPage,
             commit: { sourcePageIndex, destinationPageIndex in
                 guard let selectedDocument else { return }
@@ -434,6 +435,15 @@ struct ContentView: View {
         )
         .id(scrubberRevision)
         .frame(maxWidth: .infinity)
+    }
+
+    private func bookmarkSliderPositions(pageCount: Int) -> [Double] {
+        guard pageCount > 1 else { return [] }
+        let lastPageIndex = Double(pageCount - 1)
+        return Set(bookmarkPageIndices.compactMap { $0 })
+            .filter { (0..<pageCount).contains($0) }
+            .sorted()
+            .map { Double($0) / lastPageIndex }
     }
 
     /// The PDF outline is already available for the contents sheet.  Its
@@ -1810,6 +1820,7 @@ private struct PageScrubber: View {
     let pageIndex: Int
     let pageCount: Int
     let chapterPositions: [ChapterSliderMark]
+    let bookmarkPositions: [Double]
     let seek: (Int) -> Void
     let commit: (Int, Int) -> Void
     @State private var pageIndexWhenScrubbingBegan: Int?
@@ -1839,6 +1850,7 @@ private struct PageScrubber: View {
                 ),
                 range: 0...Double(max(pageCount - 1, 0)),
                 chapterPositions: chapterPositions,
+                bookmarkPositions: bookmarkPositions,
                 onEditingChanged: { isEditing in
                     if isEditing {
                         if pageIndexWhenScrubbingBegan == nil {
@@ -1875,6 +1887,7 @@ private struct CircularPageSlider: UIViewRepresentable {
     @Binding var value: Double
     let range: ClosedRange<Double>
     let chapterPositions: [ChapterSliderMark]
+    let bookmarkPositions: [Double]
     let onEditingChanged: (Bool) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -1899,6 +1912,7 @@ private struct CircularPageSlider: UIViewRepresentable {
         slider.minimumValue = Float(range.lowerBound)
         slider.maximumValue = Float(range.upperBound)
         slider.chapterPositions = chapterPositions
+        slider.bookmarkPositions = bookmarkPositions
         // A page can change because of a link, contents entry, history action,
         // or normal reading. Never fight a finger which is currently dragging.
         if !slider.isTracking {
@@ -1946,6 +1960,9 @@ private final class ChapterMarkedSlider: UISlider {
     var chapterPositions: [ChapterSliderMark] = [] {
         didSet { refreshChapterMarkers() }
     }
+    var bookmarkPositions: [Double] = [] {
+        didSet { refreshChapterMarkers() }
+    }
 
     private let tickOverlay = ChapterTickOverlay()
 
@@ -1978,7 +1995,7 @@ private final class ChapterMarkedSlider: UISlider {
         // it stops half a thumb-width from either end. Ask UIKit for each
         // prospective thumb centre so the chapter marks exactly agree with
         // the position the slider itself uses.
-        tickOverlay.ticks = chapterPositions.map { mark in
+        let chapterTicks = chapterPositions.map { mark in
             let chapterValue = minimumValue + Float(mark.position) * range
             let chapterCenter = thumbRect(
                 forBounds: bounds,
@@ -1991,6 +2008,23 @@ private final class ChapterMarkedSlider: UISlider {
                 level: mark.level
             )
         }
+        let bookmarkTicks = bookmarkPositions.map { position in
+            let bookmarkValue = minimumValue + Float(position) * range
+            let bookmarkCenter = thumbRect(
+                forBounds: bounds,
+                trackRect: track,
+                value: bookmarkValue
+            ).midX
+            return ChapterTick(
+                x: bookmarkCenter,
+                isPast: CGFloat(position) <= currentPosition,
+                level: 0,
+                isBookmark: true
+            )
+        }
+        // Draw bookmarks last so a bookmark at a chapter boundary remains
+        // recognisable as the reader's own marker.
+        tickOverlay.ticks = chapterTicks + bookmarkTicks
         tickOverlay.thumbCenter = thumbCenter
         tickOverlay.thumbRadius = thumbRect(forBounds: bounds, trackRect: track, value: value).width / 2
         tickOverlay.trackCenterY = track.midY
@@ -2021,6 +2055,16 @@ private final class ChapterTickOverlay: UIView {
             // same muted treatment as one on the filled track. In particular,
             // this covers marks just to the handle's right of centre.
             let isCoveredByThumb = abs(tick.x - thumbCenter) <= thumbRadius
+            if tick.isBookmark {
+                context?.setFillColor(UIColor.white.withAlphaComponent(0.96).cgColor)
+                context?.fill(CGRect(
+                    x: tick.x - 1.5,
+                    y: trackCenterY - trackHeight / 2 - 1.5,
+                    width: 3,
+                    height: trackHeight + 3
+                ))
+                continue
+            }
             let isSecondLevel = tick.level > 0
             let color = tick.isPast || isCoveredByThumb
                 ? UIColor(white: isSecondLevel ? 0.48 : 0.38, alpha: isSecondLevel ? 0.65 : 0.9)
@@ -2040,6 +2084,7 @@ private struct ChapterTick {
     let x: CGFloat
     let isPast: Bool
     let level: Int
+    var isBookmark = false
 }
 
 @MainActor
