@@ -2056,7 +2056,7 @@ private final class ChapterTickOverlay: UIView {
             // this covers marks just to the handle's right of centre.
             let isCoveredByThumb = abs(tick.x - thumbCenter) <= thumbRadius
             if tick.isBookmark {
-                context?.setFillColor(UIColor.white.withAlphaComponent(0.96).cgColor)
+                context?.setFillColor(UIColor(white: 0.72, alpha: 0.9).cgColor)
                 let diameter: CGFloat = 4
                 context?.fillEllipse(in: CGRect(
                     x: tick.x - diameter / 2,
