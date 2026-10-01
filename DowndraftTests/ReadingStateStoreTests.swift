@@ -11,6 +11,21 @@ final class ReadingStateStoreTests: XCTestCase {
         XCTAssertTrue(state.bookmarks.allSatisfy { $0.modifiedAt == .distantPast })
     }
 
+    func testLatestUpdateIncludesBookmarksAndIgnoresUnmodifiedSlots() {
+        let pageUpdate = Date(timeIntervalSinceReferenceDate: 10)
+        let bookmarkUpdate = Date(timeIntervalSinceReferenceDate: 20)
+        let state = ReadingStateStore.State(
+            page: .init(index: 8, modifiedAt: pageUpdate, deviceID: "ipad"),
+            bookmarks: [
+                .init(pageIndex: 12, modifiedAt: bookmarkUpdate, deviceID: "phone"),
+                .init(pageIndex: nil, modifiedAt: .distantPast, deviceID: "")
+            ]
+        )
+
+        XCTAssertEqual(ReadingStateStore.latestUpdate(in: state), bookmarkUpdate)
+        XCTAssertNil(ReadingStateStore.latestUpdate(in: .initial(pageIndex: 0, bookmarks: [])))
+    }
+
     func testMergeKeepsNewestPageAndEachNewestBookmark() {
         let older = Date(timeIntervalSinceReferenceDate: 10)
         let newer = Date(timeIntervalSinceReferenceDate: 20)

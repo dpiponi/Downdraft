@@ -68,6 +68,7 @@ struct ContentView: View {
     @State private var followsSharedPosition = true
     @State private var chapterMarkDepth: ChapterMarkDepth = .topLevel
     @State private var readingPositionConflict: ReadingPositionConflict?
+    @State private var readingSyncStatus: ReadingStateStore.SyncStatus?
     @State private var bookmarkRailPlacement: CGFloat = 0
     @State private var bookmarkRailPlacementIsLandscape: Bool?
     @State private var bookmarkRailDragTranslation: CGFloat = 0
@@ -114,6 +115,15 @@ struct ContentView: View {
 
     private var canToggleSharedPositionLink: Bool {
         selectedDocument?.readingStateIdentity != nil
+    }
+
+    private var readingSyncStatusLabel: String? {
+        guard let readingSyncStatus else { return nil }
+        let components = [
+            readingSyncStatus.lastCloudCheckAt.map { "iCloud \($0.formatted(date: .omitted, time: .shortened))" },
+            readingSyncStatus.lastDataUpdateAt.map { "data \($0.formatted(date: .omitted, time: .shortened))" }
+        ].compactMap { $0 }
+        return components.isEmpty ? nil : components.joined(separator: " · ")
     }
 
     private var visibleBookmarks: [(index: Int, pageIndex: Int)] {
@@ -604,6 +614,17 @@ struct ContentView: View {
                         .padding(.leading, layout.horizontalLeading)
                         .padding(.trailing, layout.horizontalTrailing)
                         .padding(.top, layout.topPadding)
+                    }
+
+                    if let readingSyncStatusLabel {
+                        Text(readingSyncStatusLabel)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.58))
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .padding(.horizontal, layout.horizontalTrailing)
+                            .padding(.top, 4)
+                            .allowsHitTesting(false)
                     }
                     Spacer(minLength: 0)
                 }
@@ -1191,6 +1212,7 @@ struct ContentView: View {
     private func selectDocument(_ id: OpenDocument.ID) {
         guard let document = documents.first(where: { $0.id == id }) else { return }
         selectedDocumentID = id
+        readingSyncStatus = nil
         loadingMessage = "Opening PDF…"
         document.loadFileIfNeeded(progress: { message in
             loadingMessage = message
@@ -1205,6 +1227,9 @@ struct ContentView: View {
     }
 
     private func finishSelecting(_ document: OpenDocument) {
+        if let identity = document.readingStateIdentity {
+            ReadingStateStore.synchronize(for: identity)
+        }
         let readingPreference = document.readingStateIdentity.map(DeviceReadingModeStore.preference(for:)) ?? .linked
         followsSharedPosition = readingPreference.followsSharedPosition
         let inferredChapterMarkDepth = document.pdfDocument.map(guessedChapterMarkDepth) ?? .none
@@ -1233,6 +1258,7 @@ struct ContentView: View {
         scheduleRecentThumbnail(for: document.id)
         outlineDestination = nil
         clearSearch()
+        refreshReadingSyncStatus(for: document)
         saveDocuments()
     }
 
@@ -1429,6 +1455,7 @@ struct ContentView: View {
                 fallbackPageModifiedAt: followsSharedPosition ? document.lastPageModifiedAt : .distantPast
             )
         }
+        refreshReadingSyncStatus(for: document)
         saveDocuments()
     }
 
@@ -1484,6 +1511,9 @@ struct ContentView: View {
             )
         } else if let identity = document.readingStateIdentity {
             DeviceReadingModeStore.updateDetachedPage(pageIndex, for: identity)
+        }
+        if id == selectedDocumentID {
+            refreshReadingSyncStatus(for: document)
         }
         RecentDocumentStore.updateReadingPosition(
             bookmarkData: document.bookmarkData,
@@ -1763,6 +1793,15 @@ struct ContentView: View {
         document.bookmarkPageIndices = OpenDocument.deduplicatedBookmarks(state.bookmarks.map(\.pageIndex))
     }
 
+    private func refreshReadingSyncStatus(for document: OpenDocument) {
+        guard let identity = document.readingStateIdentity else {
+            readingSyncStatus = nil
+            return
+        }
+        let state = sharedReadingState(for: document, usesDocumentFallback: followsSharedPosition)
+        readingSyncStatus = ReadingStateStore.syncStatus(for: identity, state: state)
+    }
+
     private func sharedReadingState(
         for document: OpenDocument,
         usesDocumentFallback: Bool
@@ -1781,6 +1820,7 @@ struct ContentView: View {
     private func refreshSharedReadingState() {
         guard let document = selectedDocument,
               let identity = document.readingStateIdentity else { return }
+        ReadingStateStore.recordCloudCheck(for: identity)
         let previousPage = document.lastPageIndex
         let state = ReadingStateStore.state(
             for: identity,
@@ -1790,6 +1830,7 @@ struct ContentView: View {
         )
         document.bookmarkPageIndices = OpenDocument.deduplicatedBookmarks(state.bookmarks.map(\.pageIndex))
         bookmarkPageIndices = document.bookmarkPageIndices
+        readingSyncStatus = ReadingStateStore.syncStatus(for: identity, state: state)
         guard followsSharedPosition else {
             saveDocuments()
             return

@@ -16,6 +16,7 @@ enum ChapterMarkDepth: Int, Codable, Equatable {
 enum ReadingStateStore {
     private static let keyPrefix = "reading-state."
     private static let localPrefix = "local-reading-state."
+    private static let lastSyncPrefix = "reading-state-last-cloud-sync."
     // All reading-state access happens on the app's main thread.  These
     // Foundation reference types predate Swift Sendable annotations.
     nonisolated(unsafe) private static let cloud = NSUbiquitousKeyValueStore.default
@@ -60,6 +61,15 @@ enum ReadingStateStore {
                 }
             )
         }
+    }
+
+    /// Local, per-document evidence of iCloud activity. `synchronize()` can
+    /// refresh the key-value store, but it cannot promise when another device
+    /// will receive a newly written value; the UI therefore calls this a
+    /// "check" rather than implying guaranteed delivery.
+    struct SyncStatus: Equatable {
+        let lastCloudCheckAt: Date?
+        let lastDataUpdateAt: Date?
     }
 
     /// A stable identity for the same PDF opened through different Files URLs.
@@ -122,6 +132,31 @@ enum ReadingStateStore {
         return resolved
     }
 
+    /// Requests a refresh of the iCloud key-value store for the document and
+    /// remembers when that request completed successfully on this device.
+    static func synchronize(for identity: String) {
+        guard cloud.synchronize() else { return }
+        recordCloudCheck(for: identity)
+    }
+
+    /// An external-change notification is already evidence that iCloud
+    /// delivered a fresh key-value-store change to this device.
+    static func recordCloudCheck(for identity: String) {
+        defaults.set(Date(), forKey: lastSyncKey(for: identity))
+    }
+
+    static func syncStatus(for identity: String, state: State) -> SyncStatus {
+        SyncStatus(
+            lastCloudCheckAt: defaults.object(forKey: lastSyncKey(for: identity)) as? Date,
+            lastDataUpdateAt: latestUpdate(in: state)
+        )
+    }
+
+    static func latestUpdate(in state: State) -> Date? {
+        let timestamps = [state.page.modifiedAt] + state.bookmarks.map(\.modifiedAt)
+        return timestamps.filter { $0 != .distantPast }.max()
+    }
+
     static func savePage(
         _ pageIndex: Int,
         for identity: String,
@@ -180,7 +215,7 @@ enum ReadingStateStore {
         guard let data = try? JSONEncoder().encode(state) else { return }
         saveLocalData(data, for: identity)
         cloud.set(data, forKey: cloudKey(for: identity))
-        cloud.synchronize()
+        synchronize(for: identity)
     }
 
     private static func saveLocal(_ state: State, for identity: String) {
@@ -257,6 +292,7 @@ enum ReadingStateStore {
 
     private static func cloudKey(for identity: String) -> String { keyPrefix + identity }
     private static func localKey(for identity: String) -> String { localPrefix + identity }
+    private static func lastSyncKey(for identity: String) -> String { lastSyncPrefix + identity }
 
     private static func trailerID(in data: Data) -> String? {
         guard let text = String(data: data, encoding: .isoLatin1) else { return nil }
