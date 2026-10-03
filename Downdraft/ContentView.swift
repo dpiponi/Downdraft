@@ -433,6 +433,7 @@ struct ContentView: View {
             pageCount: document.pageCount,
             chapterPositions: chapterSliderMarks(in: document),
             bookmarkPositions: bookmarkSliderPositions(pageCount: document.pageCount),
+            searchPositions: searchSliderPositions(in: document),
             seek: requestPage,
             commit: { sourcePageIndex, destinationPageIndex in
                 guard let selectedDocument else { return }
@@ -454,6 +455,20 @@ struct ContentView: View {
             .filter { (0..<pageCount).contains($0) }
             .sorted()
             .map { Double($0) / lastPageIndex }
+    }
+
+    /// A result dot represents a page rather than every individual text
+    /// match, so several occurrences on one page remain a single useful
+    /// landmark on the small scrubber.
+    private func searchSliderPositions(in document: PDFDocument) -> [Double] {
+        guard !searchResults.isEmpty, document.pageCount > 1 else { return [] }
+        let lastPageIndex = Double(document.pageCount - 1)
+        return Set(searchResults.compactMap { selection in
+            selection.pages.first.map(document.index(for:))
+        })
+        .filter { (0..<document.pageCount).contains($0) }
+        .sorted()
+        .map { Double($0) / lastPageIndex }
     }
 
     /// The PDF outline is already available for the contents sheet.  Its
@@ -1867,6 +1882,7 @@ private struct PageScrubber: View {
     let pageCount: Int
     let chapterPositions: [ChapterSliderMark]
     let bookmarkPositions: [Double]
+    let searchPositions: [Double]
     let seek: (Int) -> Void
     let commit: (Int, Int) -> Void
     @State private var pageIndexWhenScrubbingBegan: Int?
@@ -1897,6 +1913,7 @@ private struct PageScrubber: View {
                 range: 0...Double(max(pageCount - 1, 0)),
                 chapterPositions: chapterPositions,
                 bookmarkPositions: bookmarkPositions,
+                searchPositions: searchPositions,
                 onEditingChanged: { isEditing in
                     if isEditing {
                         if pageIndexWhenScrubbingBegan == nil {
@@ -1934,6 +1951,7 @@ private struct CircularPageSlider: UIViewRepresentable {
     let range: ClosedRange<Double>
     let chapterPositions: [ChapterSliderMark]
     let bookmarkPositions: [Double]
+    let searchPositions: [Double]
     let onEditingChanged: (Bool) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -1959,6 +1977,7 @@ private struct CircularPageSlider: UIViewRepresentable {
         slider.maximumValue = Float(range.upperBound)
         slider.chapterPositions = chapterPositions
         slider.bookmarkPositions = bookmarkPositions
+        slider.searchPositions = searchPositions
         // A page can change because of a link, contents entry, history action,
         // or normal reading. Never fight a finger which is currently dragging.
         if !slider.isTracking {
@@ -2007,6 +2026,9 @@ private final class ChapterMarkedSlider: UISlider {
         didSet { refreshChapterMarkers() }
     }
     var bookmarkPositions: [Double] = [] {
+        didSet { refreshChapterMarkers() }
+    }
+    var searchPositions: [Double] = [] {
         didSet { refreshChapterMarkers() }
     }
 
@@ -2065,9 +2087,18 @@ private final class ChapterMarkedSlider: UISlider {
                 isBookmark: true
             )
         }
-        // Draw bookmarks last so a bookmark at a chapter boundary remains
-        // recognisable as the reader's own marker.
-        tickOverlay.ticks = chapterTicks + bookmarkTicks
+        let searchTicks = searchPositions.map { position in
+            ChapterTick(
+                x: sliderX(for: position),
+                isPast: CGFloat(position) <= currentPosition,
+                level: 0,
+                isSearchResult: true
+            )
+        }
+        // Draw reader-specific dots after chapter marks so a bookmark at a
+        // chapter boundary remains recognisable. Search dots use the other
+        // side of the track and therefore remain distinct from bookmarks.
+        tickOverlay.ticks = chapterTicks + bookmarkTicks + searchTicks
         tickOverlay.thumbCenter = thumbCenter
         tickOverlay.thumbRadius = thumbRect(forBounds: bounds, trackRect: track, value: value).width / 2
         tickOverlay.trackCenterY = track.midY
@@ -2109,6 +2140,17 @@ private final class ChapterTickOverlay: UIView {
                 ))
                 continue
             }
+            if tick.isSearchResult {
+                context?.setFillColor(UIColor(white: 0.72, alpha: 0.72).cgColor)
+                let diameter: CGFloat = 4
+                context?.fillEllipse(in: CGRect(
+                    x: tick.x - diameter / 2,
+                    y: trackCenterY + trackHeight / 2 + 3,
+                    width: diameter,
+                    height: diameter
+                ))
+                continue
+            }
             let isSecondLevel = tick.level > 0
             let color = tick.isPast || isCoveredByThumb
                 ? UIColor(white: isSecondLevel ? 0.48 : 0.38, alpha: isSecondLevel ? 0.65 : 0.9)
@@ -2129,6 +2171,7 @@ private struct ChapterTick {
     let isPast: Bool
     let level: Int
     var isBookmark = false
+    var isSearchResult = false
 }
 
 @MainActor
