@@ -4,6 +4,8 @@ Downdraft is a deliberately small PDF reader for iPhone and iPad. It is for
 reading documents where they already live in Files, rather than importing them
 into a new bookshelf or library.
 
+It is vibe-coded.
+
 ## Why it exists
 
 One of the pleasures of a paper book is being able to put a finger between two
