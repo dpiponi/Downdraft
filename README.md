@@ -4,7 +4,9 @@ Downdraft is a deliberately small PDF reader for iPhone and iPad. It is for
 reading documents where they already live in Files, rather than importing them
 into a new bookshelf or library.
 
-It is vibe-coded.
+It is vibe-coded.l and is pretty much the perfect PDF reader that I've always wanted.
+
+The only outstanding issue is how best to sync the "current position" if there's ever lag in syncing. I haven't inplemented the best strategy because I don't know what the best strategy is.
 
 ## Why it exists
 
