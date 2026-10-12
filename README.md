@@ -6,7 +6,11 @@ into a new bookshelf or library.
 
 It is vibe-coded.l and is pretty much the perfect PDF reader that I've always wanted.
 
-The only outstanding issue is how best to sync the "current position" if there's ever lag in syncing. I haven't inplemented the best strategy because I don't know what the best strategy is.
+The only outstanding issue is how best to
+sync the "current position" if there's ever lag
+or multiple devices ooen simultaneously.
+I haven't inplemented the best strategy
+because I don't know what the best strategy is.
 
 ## Why it exists
 
