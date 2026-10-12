@@ -8,7 +8,7 @@ It is vibe-coded.l and is pretty much the perfect PDF reader that I've always wa
 
 The only outstanding issue is how best to
 sync the "current position" if there's ever lag
-or multiple devices ooen simultaneously.
+or multiple devices open simultaneously.
 I haven't inplemented the best strategy
 because I don't know what the best strategy is.
 
